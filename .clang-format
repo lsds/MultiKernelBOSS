@@ -1,0 +1,9 @@
+BasedOnStyle: llvm
+ColumnLimit: 100
+UseTab: Never
+TabWidth: 2
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+SpaceBeforeParens: Never
+Standard: c++17

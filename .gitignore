@@ -1,0 +1,10 @@
+.dir-locals.el
+.vscode
+.vs
+dbgen/
+data/tpch_*MB/
+build/
+Debug/
+Release/
+MinSizeRel/
+RelWithDebInfo/
