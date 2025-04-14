@@ -6,6 +6,8 @@
 
 ## Preparation on the host for CUDA support
 ```
+follow instructions to install docker https://docs.docker.com/engine/install/
+follow instructions to install nvidia-container-toolkit https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
 sudo apt update
 sudo apt install nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
@@ -27,8 +29,8 @@ ldconfig
 
 ## Get the benchmark code
 ```
-git clone https://gitfront.io/r/hmohrdaurat/HPqpn35ChFLR/MultiKernelBOSS-VLDB-Code.git
-cd MultiKernelBOSS-VLDB-Code
+git clone https://github.com/lsds/MultiKernelBOSS.git
+cd MultiKernelBOSS
 ```
 
 ## Generate TPC-H dataset
