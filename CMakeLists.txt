@@ -45,6 +45,12 @@ endif(MSVC)
 
 ############################### External Projects ###############################
 
+if(WIN32)
+  set(EXTERNAL_PROJECTS_LIB_SUFFIX ${CMAKE_LINK_LIBRARY_SUFFIX})
+else()
+  set(EXTERNAL_PROJECTS_LIB_SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX})
+endif(WIN32)
+
 include(ExternalProject)
 
 ExternalProject_Add(googlebenchmark
@@ -206,7 +212,7 @@ add_dependencies(Benchmarks googlebenchmark)
 target_link_libraries(Benchmarks benchmark)
 target_link_libraries(Benchmarks benchmark_main)
 add_dependencies(Benchmarks monetdb duckdblib)
-target_link_libraries(Benchmarks monetdbe duckdb)
+target_link_libraries(Benchmarks monetdbe ${MultiKernelBenchmarks_BINARY_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}duckdb${EXTERNAL_PROJECTS_LIB_SUFFIX})
 add_dependencies(Benchmarks BOSS)
 target_link_libraries(Benchmarks BOSS)
 add_dependencies(Benchmarks BOSSArrowStorage)
@@ -237,6 +243,6 @@ if(WIN32)
   FILE(GLOB ALL_DEPENDENT_DLLS "${MultiKernelBenchmarks_BINARY_DIR}/*.dll")
   install(FILES ${ALL_DEPENDENT_DLLS} DESTINATION bin)
 else()
-  install(FILES ${Benchmarks_BINARY_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}duckdb${EXTERNAL_PROJECTS_LIB_SUFFIX} DESTINATION lib)
-  install(FILES ${Benchmarks_BINARY_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}monetdbe${EXTERNAL_PROJECTS_LIB_SUFFIX} DESTINATION lib)  
+  install(FILES ${MultiKernelBenchmarks_BINARY_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}duckdb${EXTERNAL_PROJECTS_LIB_SUFFIX} DESTINATION lib)
+  install(FILES ${MultiKernelBenchmarks_BINARY_DIR}/deps/lib/${CMAKE_SHARED_LIBRARY_PREFIX}monetdbe${EXTERNAL_PROJECTS_LIB_SUFFIX} DESTINATION lib)  
 endif(WIN32)
