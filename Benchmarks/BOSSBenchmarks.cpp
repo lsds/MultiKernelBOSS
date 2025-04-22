@@ -64,7 +64,7 @@ static bool DISABLE_GPU_CACHE = false;
 static bool DISABLE_CONSTRAINTS = false;
 static bool DISABLE_GATHER_OPERATOR = false;
 static bool DISABLE_AUTO_DICTIONARY_ENCODING = false;
-static bool ALL_STRINGS_AS_INTEGERS = false;
+static bool DISABLE_STRINGS_AS_INTEGERS = false;
 static bool BENCHMARK_STORAGE_BLOCK_SIZE = false;
 static int64_t DEFAULT_STORAGE_BLOCK_SIZE = -1; // keep storage's default
 static int64_t MAX_GPU_MEMORY_CACHE = -1;
@@ -143,7 +143,7 @@ static void initBOSSEngine_TPCH(int dataSize, int64_t storageBlockSize) {
 
     checkForErrors(eval("Set"_("LoadToMemoryMappedFiles"_, !DISABLE_MMAP_CACHE)));
     checkForErrors(eval("Set"_("UseAutoDictionaryEncoding"_, !DISABLE_AUTO_DICTIONARY_ENCODING)));
-    checkForErrors(eval("Set"_("AllStringColumnsAsIntegers"_, ALL_STRINGS_AS_INTEGERS)));
+    checkForErrors(eval("Set"_("AllStringColumnsAsIntegers"_, !DISABLE_STRINGS_AS_INTEGERS)));
     if(storageBlockSize > 0) {
       checkForErrors(eval("Set"_("FileLoadingBlockSize"_, storageBlockSize)));
     }
@@ -372,7 +372,7 @@ static auto& bossQueries() {
                                                                             "BUILDING"))),
                                             "As"_("c_custkey"_, "c_custkey"_, "c_mktsegment"_,
                                                   "c_mktsegment"_)),
-                                        "Where"_("Equal"_("c_custkey"_, "o_custkey"_))),
+                                        "Where"_("Equal"_("o_custkey"_, "c_custkey"_))),
                                 "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
                                       "o_custkey"_, "o_custkey"_, "o_shippriority"_,
                                       "o_shippriority"_)),
@@ -1234,8 +1234,8 @@ void initAndRunBenchmarks(int argc, char** argv) {
       DISABLE_GATHER_OPERATOR = true;
     } else if(std::string("--disable-auto-dictionary-encoding") == argv[i]) {
       DISABLE_AUTO_DICTIONARY_ENCODING = true;
-    } else if(std::string("--all-strings-as-integers") == argv[i]) {
-      ALL_STRINGS_AS_INTEGERS = true;
+    } else if(std::string("--disable-strings-as-integers") == argv[i]) {
+      DISABLE_STRINGS_AS_INTEGERS = true;
     } else if(std::string("--benchmark-data-copy-in") == argv[i]) {
       BENCHMARK_DATA_COPY_IN = true;
     } else if(std::string("--benchmark-data-copy-out") == argv[i]) {
@@ -1305,7 +1305,7 @@ void initAndRunBenchmarks(int argc, char** argv) {
                            TPCH_Q6_NESTED_SELECT, TPCH_Q9_POSTFILTER_PRIORITY}) {
         std::ostringstream testName;
         auto const& queryName = queryNames()[queryIdx];
-        testName << queryName << "/";
+        testName << queryName << "/BOSS/";
         testName << dataSize << "MB";
         if(BENCHMARK_STORAGE_BLOCK_SIZE) {
           testName << "/";
