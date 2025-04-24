@@ -37,7 +37,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE TRUE) # make sure all dependent libraries ar
 
 #################################### Targets ####################################
 
-set(ImplementationFiles Source/BOSSVeloxEngine.cpp Source/BOSSQueryBuilder.cpp
+set(ImplementationFiles Source/BOSSVeloxEngine.cpp Source/BridgeVelox.cpp Source/BossConnector.cpp
         ${VELOX_DIRS}/velox/exec/tests/utils/PlanBuilder.cpp
         ${VELOX_DIRS}/velox/exec/tests/utils/Cursor.cpp)
 
