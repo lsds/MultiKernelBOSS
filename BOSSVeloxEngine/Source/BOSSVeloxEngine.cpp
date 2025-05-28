@@ -553,7 +553,8 @@ getColumns(ComplexExpression&& expression, memory::MemoryPool* pool) {
               [pool, &indices, &columnName]<typename T>(boss::Span<T>&& typedSpan) -> VectorPtr {
                 if constexpr(std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t> ||
                              std::is_same_v<T, double_t> || std::is_same_v<T, int32_t const> ||
-                             std::is_same_v<T, int64_t const> || std::is_same_v<T, double_t const>) {
+                             std::is_same_v<T, int64_t const> ||
+                             std::is_same_v<T, double_t const>) {
                   return spanToVelox<T>(std::move(typedSpan), pool, indices);
                 } else {
                   throw std::runtime_error(
@@ -809,7 +810,7 @@ static std::vector<std::string> expressionToProjections(ComplexExpression&& e) {
 }
 
 PlanBuilder Engine::buildOperatorPipeline(
-    ComplexExpression&& e, std::vector<std::pair<core::PlanNodeId, size_t>>& scanIds,
+    ComplexExpression&& e, std::vector<std::tuple<core::PlanNodeId, size_t, size_t>>& scanIds,
     memory::MemoryPool& pool, std::shared_ptr<core::PlanNodeIdGenerator>& planNodeIdGenerator,
     int& tableCnt, int& joinCnt) {
   if(e.getHead().getName() == "Table" || e.getHead().getName() == "Gather" ||
@@ -829,6 +830,7 @@ PlanBuilder Engine::buildOperatorPipeline(
 
     core::PlanNodeId scanId;
     auto numSpans = spanRowCountVec.size();
+    auto numRows = std::accumulate(spanRowCountVec.begin(), spanRowCountVec.end(), 0);
     auto plan = PlanBuilder(planNodeIdGenerator)
                     .startTableScan()
                     .outputType(tableSchema)
@@ -838,7 +840,7 @@ PlanBuilder Engine::buildOperatorPipeline(
                     .assignments(assignmentsMap)
                     .endTableScan()
                     .capturePlanNodeId(scanId);
-    scanIds.emplace_back(scanId, numSpans);
+    scanIds.emplace_back(scanId, numSpans, numRows);
     return std::move(plan);
   }
   if(e.getHead().getName() == "Project") {
@@ -889,7 +891,12 @@ PlanBuilder Engine::buildOperatorPipeline(
         it == itEnd ? std::vector<std::string>{} : expressionToOneSideKeys(std::move(secondArg));
     auto asExpr = get<ComplexExpression>(it == itEnd ? std::move(secondArg) : std::move(*it));
     auto aggregates = expressionToProjections(std::move(asExpr));
-    return inputPlan.singleAggregation(groupKeysStr, aggregates);
+    if(maxThreads < 2) {
+      return inputPlan.singleAggregation(groupKeysStr, aggregates);
+    }
+    return inputPlan.partialAggregation(groupKeysStr, aggregates)
+        .localPartition({})
+        .finalAggregation();
   }
   if(e.getHead() == "Order"_ || e.getHead() == "OrderBy"_ || e.getHead() == "Sort"_ ||
      e.getHead() == "SortBy"_) {
@@ -963,19 +970,38 @@ boss::Expression Engine::evaluate(boss::ComplexExpression&& e) {
 
   if(e.getHead().getName() == "Set") {
     auto param = std::get<Symbol>(e.getDynamicArguments()[0]);
-    if(param == "maxThreads"_) {
+    if(param == "MaxThreads"_) {
       maxThreads = std::holds_alternative<int32_t>(e.getDynamicArguments()[1])
                        ? std::get<int32_t>(e.getDynamicArguments()[1])
                        : std::get<int64_t>(e.getDynamicArguments()[1]);
       return true;
     }
-    if(param == "internalBatchNumRows"_) {
+    if(param == "NumDrivers"_) {
+      numDrivers = std::holds_alternative<int32_t>(e.getDynamicArguments()[1])
+                       ? std::get<int32_t>(e.getDynamicArguments()[1])
+                       : std::get<int64_t>(e.getDynamicArguments()[1]);
+      return true;
+    }
+    if(param == "InputBatchNumSplits"_) {
+      inputBatchNumSplits = std::holds_alternative<int32_t>(e.getDynamicArguments()[1])
+                                ? std::get<int32_t>(e.getDynamicArguments()[1])
+                                : std::get<int64_t>(e.getDynamicArguments()[1]);
+      return true;
+    }
+    if(param == "InputBatchNumRows"_) {
+      // overrides inputBatchNumSplits if > 0
+      inputBatchNumRows = std::holds_alternative<int32_t>(e.getDynamicArguments()[1])
+                              ? std::get<int32_t>(e.getDynamicArguments()[1])
+                              : std::get<int64_t>(e.getDynamicArguments()[1]);
+      return true;
+    }
+    if(param == "InternalBatchNumRows"_) {
       internalBatchNumRows = std::holds_alternative<int32_t>(e.getDynamicArguments()[1])
                                  ? std::get<int32_t>(e.getDynamicArguments()[1])
                                  : std::get<int64_t>(e.getDynamicArguments()[1]);
       return true;
     }
-    if(param == "minimumOutputBatchNumRows"_) {
+    if(param == "MinimumOutputBatchNumRows"_) {
       minimumOutputBatchNumRows = std::holds_alternative<int32_t>(e.getDynamicArguments()[1])
                                       ? std::get<int32_t>(e.getDynamicArguments()[1])
                                       : std::get<int64_t>(e.getDynamicArguments()[1]);
@@ -1000,7 +1026,7 @@ boss::Expression Engine::evaluate(boss::ComplexExpression&& e) {
 
   boss::expressions::ExpressionArguments columns;
   auto evalAndAddOutputSpans = [&, this](auto&& e) {
-    auto scanIds = std::vector<std::pair<core::PlanNodeId, size_t>>{};
+    auto scanIds = std::vector<std::tuple<core::PlanNodeId, size_t, size_t>>{};
     auto planNodeIdGenerator = std::make_shared<core::PlanNodeIdGenerator>();
     int tableCnt = 0;
     int joinCnt = 0;
@@ -1009,7 +1035,11 @@ boss::Expression Engine::evaluate(boss::ComplexExpression&& e) {
 
     auto params = std::make_unique<CursorParameters>();
     params->planNode = plan.planNode();
-    params->maxDrivers = std::max(1, (maxThreads / (joinCnt + 1)) - 1);
+    if(numDrivers > 0) {
+      params->maxDrivers = numDrivers;
+    } else {
+      params->maxDrivers = std::max(1, (maxThreads / (joinCnt + 1)) - 1);
+    }
     params->copyResult = false;
     std::shared_ptr<folly::Executor> executor;
     if(maxThreads < 2) {
@@ -1028,7 +1058,8 @@ boss::Expression Engine::evaluate(boss::ComplexExpression&& e) {
         std::make_shared<core::QueryCtx>(executor.get(), core::QueryConfig{std::move(config)});
 
     std::unique_ptr<TaskCursor> cursor;
-    auto results = veloxRunQueryParallel(*params, cursor, scanIds);
+    auto results =
+        veloxRunQueryParallel(*params, cursor, scanIds, inputBatchNumRows, inputBatchNumSplits);
     if(!cursor) {
       throw std::runtime_error("Query terminated with error");
     }

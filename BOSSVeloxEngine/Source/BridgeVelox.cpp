@@ -147,15 +147,22 @@ std::vector<RowVectorPtr> myReadCursor(CursorParameters const& params,
 
 std::vector<RowVectorPtr>
 veloxRunQueryParallel(CursorParameters const& params, std::unique_ptr<TaskCursor>& cursor,
-                      std::vector<std::pair<core::PlanNodeId, size_t>> const& scanIds) {
+                      std::vector<std::tuple<core::PlanNodeId, size_t, size_t>> const& scanIds,
+                      size_t batchSize, size_t numSplits) {
   try {
     bool noMoreSplits = false;
     auto addSplits = [&](exec::Task* task) {
       if(!noMoreSplits) {
-        for(auto const& [scanId, numSpans] : scanIds) {
-          for(size_t i = 0; i < numSpans; ++i) {
+        for(auto const& [scanId, numSpans, totalNumRows] : scanIds) {
+          if(batchSize > 0) {
+            numSplits = 2 + totalNumRows / batchSize;
+          }
+          if(numSplits < numSpans) {
+            numSplits = numSpans;
+          }
+          for(size_t i = 0; i < numSplits; ++i) {
             task->addSplit(scanId, exec::Split(std::make_shared<BossConnectorSplit>(
-                                       kBossConnectorId, numSpans, i)));
+                                       kBossConnectorId, numSplits, i)));
           }
           task->noMoreSplits(scanId);
         }

@@ -48,12 +48,15 @@ private:
       threadPools_;
 
   int32_t maxThreads = 1;
+  int32_t numDrivers = 0; // overrides maxThreads if > 0
+  int32_t inputBatchNumSplits = 64;
+  int32_t inputBatchNumRows = 0; // overrides numSplits if > 0
   int32_t internalBatchNumRows = 0;
   int32_t minimumOutputBatchNumRows = 0;
   bool hashAdaptivityEnabled = true;
 
   PlanBuilder buildOperatorPipeline(ComplexExpression&& e,
-                                    std::vector<std::pair<core::PlanNodeId, size_t>>& scanIds,
+                                    std::vector<std::tuple<core::PlanNodeId, size_t, size_t>>& scanIds,
                                     memory::MemoryPool& pool,
                                     std::shared_ptr<core::PlanNodeIdGenerator>& planNodeIdGenerator,
                                     int& tableCnt, int& joinCnt);
