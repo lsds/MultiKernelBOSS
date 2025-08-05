@@ -298,6 +298,7 @@ enum TPCH_VARIANTS {
   TPCH_Q3_POSTFILTER_2JOINS,   // post-filter both joins (when both joins fit in GPU memory)
   TPCH_Q6_NESTED_SELECT,       // nest select ops with single predicates
   TPCH_Q9_POSTFILTER_PRIORITY, // post-filter 3rd join + priority on lineitem x order
+  TPCH_Q18_ALT_JOIN_ORDER,
 };
 
 static auto& queryNames() {
@@ -315,6 +316,7 @@ static auto& queryNames() {
     names.try_emplace(TPCH_Q3_POSTFILTER_2JOINS, "TPC-H_Q3V_POST-FILTER-2JOINS");
     names.try_emplace(TPCH_Q6_NESTED_SELECT, "TPC-H_Q6V_NESTED-SELECT");
     names.try_emplace(TPCH_Q9_POSTFILTER_PRIORITY, "TPC-H_Q9V_POST-FILTER-AND-PRIORITY");
+    names.try_emplace(TPCH_Q18_ALT_JOIN_ORDER, "TPC-H_Q18V_ALT-JOIN-ORDER");
   }
   return names;
 }
@@ -518,6 +520,36 @@ static auto& bossQueries() {
                                   "o_orderdate"_, "o_orderdate"_, "o_totalprice"_,
                                   "o_totalprice"_)),
                         "Where"_("Equal"_("l_orderkey"_, "o_orderkey"_))),
+                    "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
+                          "o_totalprice"_, "o_totalprice"_, "o_custkey"_, "o_custkey"_,
+                          "sum_l_quantity"_, "sum_l_quantity"_)),
+                "By"_("o_custkey"_, "o_orderkey"_, "o_orderdate"_, "o_totalprice"_),
+                "Sum"_("sum_l_quantity"_)),
+            "By"_("o_totalprice"_, "desc"_, "o_orderdate"_), 100));
+
+    queries.try_emplace(
+        TPCH_Q18_ALT_JOIN_ORDER,
+        "Top"_(
+            "Group"_(
+                "Project"_(
+                    "Join"_(
+                        "Project"_(
+                            "Join"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_)),
+                                    "Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_,
+                                                                "o_custkey"_, "o_custkey"_,
+                                                                "o_orderdate"_, "o_orderdate"_,
+                                                                "o_totalprice"_, "o_totalprice"_)),
+                                    "Where"_("Equal"_("c_custkey"_, "o_custkey"_))),
+                            "As"_("o_orderkey"_, "o_orderkey"_, "o_custkey"_, "o_custkey"_,
+                                  "o_orderdate"_, "o_orderdate"_, "o_totalprice"_,
+                                  "o_totalprice"_)),                        
+                        "Select"_(
+                            "Group"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_,
+                                                                   "l_quantity"_, "l_quantity"_)),
+                                     "By"_("l_orderkey"_),
+                                     "As"_("sum_l_quantity"_, "Sum"_("l_quantity"_))),
+                            "Where"_("Greater"_("sum_l_quantity"_, 300))), // NOLINT
+                        "Where"_("Equal"_("o_orderkey"_, "l_orderkey"_))),
                     "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
                           "o_totalprice"_, "o_totalprice"_, "o_custkey"_, "o_custkey"_,
                           "sum_l_quantity"_, "sum_l_quantity"_)),
@@ -1324,7 +1356,7 @@ void initAndRunBenchmarks(int argc, char** argv) {
              : std::vector<int64_t>{DEFAULT_STORAGE_BLOCK_SIZE})) {
       for(auto queryIdx :
           std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN, TPCH_Q3_POSTFILTER_2JOINS,
-                           TPCH_Q6_NESTED_SELECT, TPCH_Q9_POSTFILTER_PRIORITY}) {
+                           TPCH_Q6_NESTED_SELECT, TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
         std::ostringstream testName;
         auto const& queryName = queryNames()[queryIdx];
         testName << queryName << "/BOSS/";
