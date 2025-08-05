@@ -773,7 +773,7 @@ static boss::Expression toBOSSExpression(Expression&& expr, bool isPredicate = f
           [&](ComplexExpression&& e) -> boss::Expression {
             auto [head, unused_, dynamics, spans] = std::move(e).decompose();
             int NChildIsPredicate = dynamics.size(); // no child is a predicate as default
-            if(head == "Select"_) {
+            if(head == "Select"_ || head == "SelectToGather"_) {
               NChildIsPredicate = 1; // Select(relation, predicate)
             } else if(head == "Join"_) {
               NChildIsPredicate = 2; // Join(relation1, relation2, predicate)
@@ -1436,6 +1436,102 @@ public:
       return ComplexExpression("Table"_, std::move(projectedColumns));
     };
 
+    (*this)["SelectToGather"_] = [](ComplexExpression&& inputExpr) -> Expression {
+      ExpressionArguments args = std::move(inputExpr).getArguments();
+      auto it = std::make_move_iterator(args.begin());
+      auto relation = boss::get<ComplexExpression>(std::move(*it));
+      auto predExpr = std::move(*++it);
+      if(properties().disableGather || !std::holds_alternative<Pred>(predExpr)) {
+        // return unevaluated
+        return "SelectToGather"_(std::move(relation), std::move(predExpr));
+      }
+      ExpressionSpanArguments previousPositionSpans{};
+      if(relation.getHead().getName() == "Gather") {
+        // nested Selection: extract the relation and the previous position list to merge
+        auto [head, unused_, dynamics, spans] = std::move(relation).decompose();
+        previousPositionSpans = (ExpressionSpanArguments)std::move(spans);
+        relation = boss::get<ComplexExpression>(std::move(dynamics[0]));
+      } else if(relation.getHead().getName() != "Table") {
+        // return unevaluated
+        return "SelectToGather"_(std::move(relation), std::move(predExpr));
+      }
+      auto predFunc = boss::get<Pred>(std::move(predExpr));
+      auto columns = std::move(relation).getDynamicArguments();
+      bool canEvaluateSelect = true;
+      std::transform(
+          std::make_move_iterator(columns.begin()), std::make_move_iterator(columns.end()),
+          columns.begin(), [&canEvaluateSelect](auto&& columnExpr) {
+            auto column = get<ComplexExpression>(std::forward<decltype(columnExpr)>(columnExpr));
+            auto [head, unused_, dynamics, spans] = std::move(column).decompose();
+            auto list = get<ComplexExpression>(std::move(dynamics.at(1)));
+            if(list.getHead() == "DictionaryEncodedList"_) {
+              auto [unused1, unused2, listDynamics, unused3] = std::move(list).decompose();
+              list = std::move(get<ComplexExpression>(listDynamics[0]));
+            }
+            list = transformDynamicsToSpans(std::move(list));
+            auto [listHead, unusedStatics, unusedDynamics, listSpans] = std::move(list).decompose();
+            // check if the span types are supported by ArrayFire
+            for(auto const& span : listSpans) {
+              if(!std::holds_alternative<Span<int32_t>>(span) &&
+                 !std::holds_alternative<Span<int64_t>>(span) &&
+                 !std::holds_alternative<Span<double_t>>(span) &&
+                 !std::holds_alternative<Span<Pred>>(span) &&
+                 !std::holds_alternative<Span<int32_t const>>(span) &&
+                 !std::holds_alternative<Span<int64_t const>>(span) &&
+                 !std::holds_alternative<Span<double_t const>>(span) &&
+                 !std::holds_alternative<Span<Pred const>>(span)) {
+                canEvaluateSelect = false;
+                break;
+              }
+            }
+            dynamics.at(1) = ComplexExpression(std::move(listHead), {}, {}, std::move(listSpans));
+            return ComplexExpression(std::move(head), {}, std::move(dynamics), std::move(spans));
+          });
+      auto createUnevaluatedOutput = [&]() {
+        auto newRelation = ComplexExpression("Table"_, std::move(columns));
+        if(!previousPositionSpans.empty()) {
+          ExpressionArguments dynamics;
+          dynamics.emplace_back(std::move(newRelation));
+          newRelation = ComplexExpression("Gather"_, {}, std::move(dynamics),
+                                          std::move(previousPositionSpans));
+        }
+        return "SelectToGather"_(std::move(newRelation), "Where"_(std::move(predFunc)));
+      };
+      if(!canEvaluateSelect) {
+        // return unevaluated
+        return createUnevaluatedOutput();
+      }
+      // iterate on each predicate partition
+      // and, for each, generate a span for the position list
+      ExpressionSpanArguments positionSpans{};
+      auto prevPositionSpansIt = std::make_move_iterator(previousPositionSpans.begin());
+      auto prevPositionSpansItEnd = std::make_move_iterator(previousPositionSpans.end());
+      auto constexpr merge = false;        // keep the partitions
+      auto constexpr transferToGPU = true; // the predicate columns need to be transferred
+      while(auto predicate = predFunc(columns, merge, transferToGPU)) {
+        auto bitArray = static_cast<af::array const&>(*predicate);
+        auto positions = af::array(af::where(bitArray).as(s32));
+        positions.eval();
+        if(prevPositionSpansIt != prevPositionSpansItEnd) {
+          auto prevPositions = static_cast<af::array const&>(
+              std::get<boss::Span<Pred>>(std::move(*prevPositionSpansIt++)));
+          af::sync(); // seems not guaranteed inside setIntersect, so the processing could fail
+          positions = af::setIntersect(prevPositions, positions, true);
+          positions.eval();
+        }
+        positionSpans.emplace_back(boss::Span<Pred>{std::move(positions)});
+      }
+      if(positionSpans.empty()) {
+        // There was no span to process.
+        // Most likely, we ran out of GPU memory.
+        // Return the expression unevaluated
+        return createUnevaluatedOutput();
+      }
+      ExpressionArguments dynamics;
+      dynamics.emplace_back(ComplexExpression("Table"_, std::move(columns)));
+      return ComplexExpression("Gather"_, {}, std::move(dynamics), std::move(positionSpans));
+    };
+
     (*this)["Select"_] = [](ComplexExpression&& inputExpr) -> Expression {
       ExpressionArguments args = std::move(inputExpr).getArguments();
       auto it = std::make_move_iterator(args.begin());
@@ -1503,7 +1599,7 @@ public:
       }
       // iterate on each predicate partition
       // and, for each, generate a span for the position list
-      ExpressionSpanArguments positionSpans{};
+      std::vector<af::array> positionArrays;
       auto prevPositionSpansIt = std::make_move_iterator(previousPositionSpans.begin());
       auto prevPositionSpansItEnd = std::make_move_iterator(previousPositionSpans.end());
       auto constexpr merge = false;        // keep the partitions
@@ -1519,17 +1615,85 @@ public:
           positions = af::setIntersect(prevPositions, positions, true);
           positions.eval();
         }
-        positionSpans.emplace_back(boss::Span<Pred>{std::move(positions)});
+        positionArrays.emplace_back(std::move(positions));
       }
-      if(positionSpans.empty()) {
+      if(positionArrays.empty()) {
         // There was no span to process.
         // Most likely, we ran out of GPU memory.
         // Return the expression unevaluated
         return createUnevaluatedOutput();
       }
-      ExpressionArguments dynamics;
-      dynamics.emplace_back(ComplexExpression("Table"_, std::move(columns)));
-      return ComplexExpression("Gather"_, {}, std::move(dynamics), std::move(positionSpans));
+      // at this point, we evaluated the predicates into positions
+      // let's see if we have more GPU memory for the filtering:
+      // 1. collect the lambdas for all the columns to modify
+      std::vector<Pred::Function> columnFuncs;
+      columnFuncs.reserve(columns.size());
+      std::transform(columns.begin(), columns.end(), std::back_inserter(columnFuncs),
+                     [](auto const& column) {
+                       return createLambdaArgument(
+                           get<Symbol>(get<ComplexExpression>(column).getArguments()[0]));
+                     });
+      // 2. apply filtering to each column
+      bool failed = false;
+      auto columnFuncIt = columnFuncs.begin();
+      std::transform(
+          std::make_move_iterator(columns.begin()), std::make_move_iterator(columns.end()),
+          columns.begin(), [&positionArrays, &columnFuncIt, &columns, &failed](auto&& column) {
+            if(failed) {
+              return std::move(get<ComplexExpression>(column));
+            }
+            auto&& columnExpr = get<ComplexExpression>(column);
+            // get the partition to filter
+            auto& columnFunc = *columnFuncIt++;
+            if(columnExpr.getHead() == "Index"_) {
+              // don't filter indices that are not used down the pipeline
+              if(columnExpr.getDynamicArguments().empty() ||
+                 !usedTableSymbols(true).contains(
+                     get<Symbol>(columnExpr.getDynamicArguments()[0]))) {
+                return std::move(get<ComplexExpression>(column));
+              }
+            }
+            // for each span, do the filtering
+            auto constexpr merge = false;        // keep the partitions
+            auto constexpr transferToGPU = true; // the filtered columns need to be transferred
+            auto positionArrayIt = positionArrays.begin();
+            ExpressionSpanArguments newListSpans;
+            while(auto beforeFilter = columnFunc(columns, merge, transferToGPU)) {
+              if(!beforeFilter) {
+                failed = true; // likely we ran out of GPU memory
+                return std::move(get<ComplexExpression>(column));
+              }
+              newListSpans.emplace_back(boss::Span<Pred>(
+                  af::lookup(static_cast<af::array const&>(*beforeFilter), *positionArrayIt)));
+              ++positionArrayIt;
+            }
+            // decompose the column into the parts to access/modify
+            auto [head, unused, dynamics, spans] = std::move(columnExpr).decompose();
+            auto const& symbol = get<Symbol>(dynamics.at(0));
+            auto list = get<ComplexExpression>(std::move(dynamics.at(1)));
+            auto [listHead, listUnused1, listDynamics, listSpans] = std::move(list).decompose();
+            // remembered that we filtered this column, so we don't use indexes anymore
+            filteredAttributes().insert(symbol);
+            // return the updated column
+            dynamics.at(1) = ComplexExpression(std::move(listHead), {}, std::move(listDynamics),
+                                               std::move(newListSpans));
+            return ComplexExpression(std::move(head), {}, std::move(dynamics), std::move(spans));
+          });
+      if(failed) {
+        // There was no span to process.
+        // Most likely, we ran out of GPU memory.
+        // At least, return the expression as a Gather (since we calculated the positions)
+        ExpressionSpanArguments positionSpans{};
+        columnFuncs.reserve(columns.size());
+        std::transform(
+            std::make_move_iterator(positionArrays.begin()),
+            std::make_move_iterator(positionArrays.end()), std::back_inserter(positionSpans),
+            [](auto&& positionArray) { return boss::Span<Pred>{std::move(positionArray)}; });
+        ExpressionArguments dynamics;
+        dynamics.emplace_back(ComplexExpression("Table"_, std::move(columns)));
+        return ComplexExpression("Gather"_, {}, std::move(dynamics), std::move(positionSpans));
+      }
+      return ComplexExpression("Table"_, std::move(columns));
     };
 
     (*this)["Join"_] = [](ComplexExpression&& inputExpr) -> Expression {
@@ -2001,7 +2165,7 @@ static Expression evaluateInternal(Expression&& expr) {
                 std::swap(oldSymbols, usedTableSymbols(symbolAsIndex));
                 return std::move(result);
               };
-              if(head == "Select"_ || head == "Project"_) {
+              if(head == "Select"_ || head == "SelectToGather"_ || head == "Project"_) {
                 if(e.getDynamicArguments().size() > 1) {
                   return findUsedTableSymbolsAndEvaluate(e.getDynamicArguments()[1], false);
                 }
