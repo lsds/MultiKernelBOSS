@@ -895,7 +895,7 @@ PlanBuilder Engine::buildOperatorPipeline(
       return inputPlan.singleAggregation(groupKeysStr, aggregates);
     }
     return inputPlan.partialAggregation(groupKeysStr, aggregates)
-        .localPartition({})
+        .localPartition(groupKeysStr)
         .finalAggregation();
   }
   if(e.getHead() == "Order"_ || e.getHead() == "OrderBy"_ || e.getHead() == "Sort"_ ||
@@ -905,7 +905,8 @@ PlanBuilder Engine::buildOperatorPipeline(
     auto inputPlan = buildOperatorPipeline(get<ComplexExpression>(std::move(*it++)), scanIds, pool,
                                            planNodeIdGenerator, tableCnt, joinCnt);
     auto groupKeysStr = expressionToOneSideKeys(std::move(*it));
-    return inputPlan.orderBy(groupKeysStr, true).localMerge(groupKeysStr);
+    return inputPlan.localPartition(std::vector<std::string>{})
+                    .orderBy(groupKeysStr, false);//.localMerge(groupKeysStr);
   }
   if(e.getHead() == "Top"_ || e.getHead() == "TopN"_) {
     auto [head, unused_, dynamics, unused2_] = std::move(e).decompose();
@@ -915,7 +916,10 @@ PlanBuilder Engine::buildOperatorPipeline(
     auto groupKeysStr = expressionToOneSideKeys(std::move(*it++));
     auto limit = std::holds_alternative<int32_t>(*it) ? std::get<int32_t>(std::move(*it))
                                                       : std::get<int64_t>(std::move(*it));
-    return inputPlan.topN(groupKeysStr, limit, true).localMerge(groupKeysStr);
+    return inputPlan.localPartition(std::vector<std::string>{})
+                    .orderBy(groupKeysStr, false)//.localMerge(groupKeysStr)
+                    .limit(0, limit, false);
+                    //.topN(groupKeysStr, limit, true).localMerge(groupKeysStr);
   }
   if(e.getHead() == "Let"_) {
     auto [head, unused_, dynamics, unused2_] = std::move(e).decompose();
