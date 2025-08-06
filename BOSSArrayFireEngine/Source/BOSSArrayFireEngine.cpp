@@ -1659,13 +1659,13 @@ public:
             auto positionArrayIt = positionArrays.begin();
             ExpressionSpanArguments newListSpans;
             while(auto beforeFilter = columnFunc(columns, merge, transferToGPU)) {
-              if(!beforeFilter) {
-                failed = true; // likely we ran out of GPU memory
-                return std::move(get<ComplexExpression>(column));
-              }
-              newListSpans.emplace_back(boss::Span<Pred>(
-                  af::lookup(static_cast<af::array const&>(*beforeFilter), *positionArrayIt)));
+              auto const& columnArray = static_cast<af::array const&>(*beforeFilter);
+              newListSpans.emplace_back(boss::Span<Pred>(af::lookup(columnArray, *positionArrayIt)));
               ++positionArrayIt;
+            }
+            if(newListSpans.empty()) {
+              failed = true; // likely we ran out of GPU memory
+              return std::move(get<ComplexExpression>(column));
             }
             // decompose the column into the parts to access/modify
             auto [head, unused, dynamics, spans] = std::move(columnExpr).decompose();
