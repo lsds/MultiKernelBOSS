@@ -1645,7 +1645,8 @@ public:
             auto&& columnExpr = get<ComplexExpression>(column);
             // get the partition to filter
             auto& columnFunc = *columnFuncIt++;
-            if(columnExpr.getHead() == "Index"_) {
+            bool isIndexColumn = columnExpr.getHead() == "Index"_;
+            if(isIndexColumn) {
               // don't filter indices that are not used down the pipeline
               if(columnExpr.getDynamicArguments().empty() ||
                  !usedTableSymbols(true).contains(
@@ -1673,7 +1674,9 @@ public:
             auto list = get<ComplexExpression>(std::move(dynamics.at(1)));
             auto [listHead, listUnused1, listDynamics, listSpans] = std::move(list).decompose();
             // remembered that we filtered this column, so we don't use indexes anymore
-            filteredAttributes().insert(symbol);
+            if(!isIndexColumn) {
+              filteredAttributes().insert(symbol);
+            }
             // return the updated column
             dynamics.at(1) = ComplexExpression(std::move(listHead), {}, std::move(listDynamics),
                                                std::move(newListSpans));
