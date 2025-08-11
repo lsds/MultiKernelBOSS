@@ -301,6 +301,33 @@ enum TPCH_VARIANTS {
   TPCH_Q18_ALT_JOIN_ORDER,
 };
 
+enum SIMPLE_QUERIES {
+  SIMPLE_Q1_SELECT_HIGH_CARD = 100, // select extracted from TCP-H Q1
+  SIMPLE_Q1_SELECT_LOW_CARD,        // same but with a much lower output cardinality
+  SIMPLE_Q3_SELECT_1,               // select extracted from TCP-H Q3 (first one)
+  SIMPLE_Q3_SELECT_2,               // select extracted from TCP-H Q3 (second one)
+  SIMPLE_Q3_SELECT_3,               // select extracted from TCP-H Q3 (third one)
+
+  // same ones but with aggregates too
+  SIMPLE_Q1_SELECT_HIGH_CARD_AND_AGG,
+  SIMPLE_Q1_SELECT_LOW_CARD_AND_AGG,
+  SIMPLE_Q3_SELECT_1_AND_AGG,
+  SIMPLE_Q3_SELECT_2_AND_AGG,
+  SIMPLE_Q3_SELECT_3_AND_AGG,
+
+  // integer-only versions
+  SIMPLE_Q1_INT_SELECT_HIGH_CARD,
+  SIMPLE_Q1_INT_SELECT_LOW_CARD,
+  SIMPLE_Q3_INT_SELECT_1,
+  SIMPLE_Q3_INT_SELECT_2,
+  SIMPLE_Q3_INT_SELECT_3,
+  SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
+  SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
+  SIMPLE_Q3_INT_SELECT_1_AND_AGG,
+  SIMPLE_Q3_INT_SELECT_2_AND_AGG,
+  SIMPLE_Q3_INT_SELECT_3_AND_AGG,
+};
+
 static auto& queryNames() {
   static std::map<int, std::string> names;
   if(names.empty()) {
@@ -317,6 +344,30 @@ static auto& queryNames() {
     names.try_emplace(TPCH_Q6_NESTED_SELECT, "TPC-H_Q6V_NESTED-SELECT");
     names.try_emplace(TPCH_Q9_POSTFILTER_PRIORITY, "TPC-H_Q9V_POST-FILTER-AND-PRIORITY");
     names.try_emplace(TPCH_Q18_ALT_JOIN_ORDER, "TPC-H_Q18V_ALT-JOIN-ORDER");
+    // Simple queries (i.e., breakdowns)
+    names.try_emplace(SIMPLE_Q1_SELECT_HIGH_CARD, "SIMPLE_Q1_SELECT-HIGH-CARD");
+    names.try_emplace(SIMPLE_Q1_SELECT_LOW_CARD, "SIMPLE_Q1_SELECT-LOW-CARD");
+    names.try_emplace(SIMPLE_Q3_SELECT_1, "SIMPLE_Q3_SELECT1");
+    names.try_emplace(SIMPLE_Q3_SELECT_2, "SIMPLE_Q3_SELECT2");
+    names.try_emplace(SIMPLE_Q3_SELECT_3, "SIMPLE_Q3_SELECT3");
+    names.try_emplace(SIMPLE_Q1_SELECT_HIGH_CARD_AND_AGG, "SIMPLE_Q1_SELECT-HIGH-CARD-AND-AGG");
+    names.try_emplace(SIMPLE_Q1_SELECT_LOW_CARD_AND_AGG, "SIMPLE_Q1_SELECT-LOW-CARD-AND-AGG");
+    names.try_emplace(SIMPLE_Q3_SELECT_1_AND_AGG, "SIMPLE_Q3_SELECT1-AND-AGG");
+    names.try_emplace(SIMPLE_Q3_SELECT_2_AND_AGG, "SIMPLE_Q3_SELECT2-AND-AGG");
+    names.try_emplace(SIMPLE_Q3_SELECT_3_AND_AGG, "SIMPLE_Q3_SELECT3-AND-AGG");
+    // integer-only versions
+    names.try_emplace(SIMPLE_Q1_INT_SELECT_HIGH_CARD, "SIMPLE_Q1_INT_SELECT-HIGH-CARD");
+    names.try_emplace(SIMPLE_Q1_INT_SELECT_LOW_CARD, "SIMPLE_Q1_INT_SELECT-LOW-CARD");
+    names.try_emplace(SIMPLE_Q3_INT_SELECT_1, "SIMPLE_Q3_INT_SELECT1");
+    names.try_emplace(SIMPLE_Q3_INT_SELECT_2, "SIMPLE_Q3_INT_SELECT2");
+    names.try_emplace(SIMPLE_Q3_INT_SELECT_3, "SIMPLE_Q3_INT_SELECT3");
+    names.try_emplace(SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
+                      "SIMPLE_Q1_INT_SELECT-HIGH-CARD-AND-AGG");
+    names.try_emplace(SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
+                      "SIMPLE_Q1_INT_SELECT-LOW-CARD-AND-AGG");
+    names.try_emplace(SIMPLE_Q3_INT_SELECT_1_AND_AGG, "SIMPLE_Q3_INT_SELECT1-AND-AGG");
+    names.try_emplace(SIMPLE_Q3_INT_SELECT_2_AND_AGG, "SIMPLE_Q3_INT_SELECT2-AND-AGG");
+    names.try_emplace(SIMPLE_Q3_INT_SELECT_3_AND_AGG, "SIMPLE_Q3_INT_SELECT3-AND-AGG");
   }
   return names;
 }
@@ -766,6 +817,119 @@ static auto& bossQueries() {
                                    "Times"_("ps_supplycost"_, "l_quantity"_)))),
                 "By"_("nation"_, "o_year"_), "Sum"_("amount"_)),
             "By"_("nation"_, "o_year"_, "desc"_)));
+
+    // simple selection
+    queries.try_emplace(
+        SIMPLE_Q1_SELECT_HIGH_CARD,
+        "Select"_("Project"_("LINEITEM"_,
+                             "As"_("l_orderkey"_, "l_orderkey"_, "l_shipdate"_, "l_shipdate"_)),
+                  "Where"_("Greater"_("DateObject"_("1998-08-31"), "l_shipdate"_))));
+    queries.try_emplace(
+        SIMPLE_Q1_SELECT_LOW_CARD,
+        "Select"_("Project"_("LINEITEM"_,
+                             "As"_("l_orderkey"_, "l_orderkey"_, "l_shipdate"_, "l_shipdate"_)),
+                  "Where"_("Greater"_("l_shipdate"_, "DateObject"_("1998-08-31")))));
+    queries.try_emplace(
+        SIMPLE_Q3_SELECT_1,
+        "Select"_("Project"_("ORDERS"_,
+                             "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_)),
+                  "Where"_("Greater"_("DateObject"_("1995-03-15"), "o_orderdate"_))));
+    queries.try_emplace(SIMPLE_Q3_SELECT_2,
+                        "Select"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_,
+                                                                "c_mktsegment"_, "c_mktsegment"_)),
+                                  "Where"_("StringContainsQ"_("c_mktsegment"_, "BUILDING"))));
+    queries.try_emplace(
+        SIMPLE_Q3_SELECT_3,
+        "Select"_("Project"_("LINEITEM"_,
+                             "As"_("l_orderkey"_, "l_orderkey"_, "l_shipdate"_, "l_shipdate"_)),
+                  "Where"_("Greater"_("l_shipdate"_, "DateObject"_("1993-03-15")))));
+
+    // simple selection + aggregation
+    queries.try_emplace(
+        SIMPLE_Q1_SELECT_HIGH_CARD_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_,
+                                                                "l_shipdate"_, "l_shipdate"_)),
+                                  "Where"_("Greater"_("DateObject"_("1998-08-31"), "l_shipdate"_))),
+                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_orderkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q1_SELECT_LOW_CARD_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_,
+                                                                "l_shipdate"_, "l_shipdate"_)),
+                                  "Where"_("Greater"_("DateObject"_("1999-10-31"), "l_shipdate"_))),
+                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_orderkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q3_SELECT_1_AND_AGG,
+        "Top"_(
+            "Group"_("Select"_("Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_,
+                                                           "o_orderdate"_, "o_orderdate"_)),
+                               "Where"_("Greater"_("DateObject"_("1995-03-15"), "o_orderdate"_))),
+                     "By"_("o_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+            "By"_("o_orderkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q3_SELECT_2_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_,
+                                                                "c_mktsegment"_, "c_mktsegment"_)),
+                                  "Where"_("StringContainsQ"_("c_mktsegment"_, "BUILDING"))),
+                        "By"_("c_custkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("c_custkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q3_SELECT_3_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_,
+                                                                "l_shipdate"_, "l_shipdate"_)),
+                                  "Where"_("Greater"_("l_shipdate"_, "DateObject"_("1993-03-15")))),
+                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_orderkey"_), 10));
+
+    // simple selection (integer only)
+    queries.try_emplace(SIMPLE_Q1_INT_SELECT_HIGH_CARD,
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
+                                  "Where"_("Greater"_(590741, "l_orderkey"_))));
+    queries.try_emplace(SIMPLE_Q1_INT_SELECT_LOW_CARD,
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
+                                  "Where"_("Greater"_("l_orderkey"_, 590741))));
+    queries.try_emplace(SIMPLE_Q3_INT_SELECT_1,
+                        "Select"_("Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_)),
+                                  "Where"_("Greater"_(290713, "o_orderkey"_))));
+    queries.try_emplace(SIMPLE_Q3_INT_SELECT_2,
+                        "Select"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_)),
+                                  "Where"_("Greater"_(3112, "c_custkey"_))));
+    queries.try_emplace(SIMPLE_Q3_INT_SELECT_3,
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
+                                  "Where"_("Greater"_(505600, "l_orderkey"_))));
+
+    // simple selection + aggregation (integer only)
+    queries.try_emplace(
+        SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
+                                  "Where"_("Greater"_(590741, "l_orderkey"_))),
+                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_orderkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
+                                  "Where"_("Greater"_("l_orderkey"_, 590741))),
+                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_orderkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q3_INT_SELECT_1_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_)),
+                                  "Where"_("Greater"_(290713, "o_orderkey"_))),
+                        "By"_("o_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("o_orderkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q3_INT_SELECT_2_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_)),
+                                  "Where"_("Greater"_(3111, "c_custkey"_))),
+                        "By"_("c_custkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("c_custkey"_), 10));
+    queries.try_emplace(
+        SIMPLE_Q3_INT_SELECT_3_AND_AGG,
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
+                                  "Where"_("Greater"_(505600, "l_orderkey"_))),
+                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_orderkey"_), 10));
   }
   return queries;
 }
@@ -1357,6 +1521,48 @@ void initAndRunBenchmarks(int argc, char** argv) {
       for(auto queryIdx :
           std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN, TPCH_Q3_POSTFILTER_2JOINS,
                            TPCH_Q6_NESTED_SELECT, TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
+        std::ostringstream testName;
+        auto const& queryName = queryNames()[queryIdx];
+        testName << queryName << "/BOSS/";
+        testName << dataSize << "MB";
+        if(BENCHMARK_STORAGE_BLOCK_SIZE) {
+          testName << "/";
+          testName << (blockSize >> 20) << "MB";
+        }
+        RegisterBenchmarkNolint(testName.str().c_str(), TPCH_test, BOSS, queryIdx, dataSize,
+                                blockSize);
+      }
+    }
+  }
+  // register simple queries (i.e., breakdowns)
+  for(int dataSize : std::vector<int>{1, 10, 100, 1000, 2000, 5000, 10000, 20000, 50000, 100000}) {
+    for(int64_t blockSize :
+        (BENCHMARK_STORAGE_BLOCK_SIZE
+             ? std::vector<int64_t>{1 << 25, 1 << 26, 1 << 27, 1 << 28, 1 << 29, 1 << 30,
+                                    std::numeric_limits<int32_t>::max()}
+             : std::vector<int64_t>{DEFAULT_STORAGE_BLOCK_SIZE})) {
+      for(auto queryIdx : std::vector<int>{
+              SIMPLE_Q1_SELECT_HIGH_CARD,
+              SIMPLE_Q1_SELECT_LOW_CARD,
+              SIMPLE_Q3_SELECT_1,
+              SIMPLE_Q3_SELECT_2,
+              SIMPLE_Q3_SELECT_3,
+              SIMPLE_Q1_SELECT_HIGH_CARD_AND_AGG,
+              SIMPLE_Q1_SELECT_LOW_CARD_AND_AGG,
+              SIMPLE_Q3_SELECT_1_AND_AGG,
+              SIMPLE_Q3_SELECT_2_AND_AGG,
+              SIMPLE_Q3_SELECT_3_AND_AGG,
+              SIMPLE_Q1_INT_SELECT_HIGH_CARD,
+              SIMPLE_Q1_INT_SELECT_LOW_CARD,
+              SIMPLE_Q3_INT_SELECT_1,
+              SIMPLE_Q3_INT_SELECT_2,
+              SIMPLE_Q3_INT_SELECT_3,
+              SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
+              SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
+              SIMPLE_Q3_INT_SELECT_1_AND_AGG,
+              SIMPLE_Q3_INT_SELECT_2_AND_AGG,
+              SIMPLE_Q3_INT_SELECT_3_AND_AGG,
+          }) {
         std::ostringstream testName;
         auto const& queryName = queryNames()[queryIdx];
         testName << queryName << "/BOSS/";
