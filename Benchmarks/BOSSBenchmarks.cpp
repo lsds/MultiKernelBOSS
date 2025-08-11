@@ -318,12 +318,10 @@ enum SIMPLE_QUERIES {
   // integer-only versions
   SIMPLE_Q1_INT_SELECT_HIGH_CARD,
   SIMPLE_Q1_INT_SELECT_LOW_CARD,
-  SIMPLE_Q3_INT_SELECT_1,
   SIMPLE_Q3_INT_SELECT_2,
   SIMPLE_Q3_INT_SELECT_3,
   SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
   SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
-  SIMPLE_Q3_INT_SELECT_1_AND_AGG,
   SIMPLE_Q3_INT_SELECT_2_AND_AGG,
   SIMPLE_Q3_INT_SELECT_3_AND_AGG,
 };
@@ -358,14 +356,12 @@ static auto& queryNames() {
     // integer-only versions
     names.try_emplace(SIMPLE_Q1_INT_SELECT_HIGH_CARD, "SIMPLE_Q1_INT_SELECT-HIGH-CARD");
     names.try_emplace(SIMPLE_Q1_INT_SELECT_LOW_CARD, "SIMPLE_Q1_INT_SELECT-LOW-CARD");
-    names.try_emplace(SIMPLE_Q3_INT_SELECT_1, "SIMPLE_Q3_INT_SELECT1");
     names.try_emplace(SIMPLE_Q3_INT_SELECT_2, "SIMPLE_Q3_INT_SELECT2");
     names.try_emplace(SIMPLE_Q3_INT_SELECT_3, "SIMPLE_Q3_INT_SELECT3");
     names.try_emplace(SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
                       "SIMPLE_Q1_INT_SELECT-HIGH-CARD-AND-AGG");
     names.try_emplace(SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
                       "SIMPLE_Q1_INT_SELECT-LOW-CARD-AND-AGG");
-    names.try_emplace(SIMPLE_Q3_INT_SELECT_1_AND_AGG, "SIMPLE_Q3_INT_SELECT1-AND-AGG");
     names.try_emplace(SIMPLE_Q3_INT_SELECT_2_AND_AGG, "SIMPLE_Q3_INT_SELECT2-AND-AGG");
     names.try_emplace(SIMPLE_Q3_INT_SELECT_3_AND_AGG, "SIMPLE_Q3_INT_SELECT3-AND-AGG");
   }
@@ -884,52 +880,43 @@ static auto& bossQueries() {
 
     // simple selection (integer only)
     queries.try_emplace(SIMPLE_Q1_INT_SELECT_HIGH_CARD,
-                        "Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
-                                  "Where"_("Greater"_(590741, "l_orderkey"_))));
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_)),
+                                  "Where"_("Greater"_(49, "l_quantity"_))));
     queries.try_emplace(SIMPLE_Q1_INT_SELECT_LOW_CARD,
-                        "Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
-                                  "Where"_("Greater"_("l_orderkey"_, 590741))));
-    queries.try_emplace(SIMPLE_Q3_INT_SELECT_1,
-                        "Select"_("Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_)),
-                                  "Where"_("Greater"_(290713, "o_orderkey"_))));
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_)),
+                                  "Where"_("Greater"_("l_quantity"_, 49))));
     queries.try_emplace(SIMPLE_Q3_INT_SELECT_2,
-                        "Select"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_)),
-                                  "Where"_("Greater"_(3112, "c_custkey"_))));
+                        "Select"_("Project"_("CUSTOMER"_, "As"_("c_nationkey"_, "c_nationkey"_)),
+                                  "Where"_("Greater"_(5, "c_nationkey"_))));
     queries.try_emplace(SIMPLE_Q3_INT_SELECT_3,
-                        "Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
-                                  "Where"_("Greater"_(505600, "l_orderkey"_))));
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_)),
+                                  "Where"_("Greater"_(42, "l_quantity"_))));
 
     // simple selection + aggregation (integer only)
     queries.try_emplace(
         SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
-        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
-                                  "Where"_("Greater"_(590741, "l_orderkey"_))),
-                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
-               "By"_("l_orderkey"_), 10));
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_)),
+                                  "Where"_("Greater"_(49, "l_quantity"_))),
+                        "By"_("l_quantity"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_quantity"_), 10));
     queries.try_emplace(
         SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
-        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
-                                  "Where"_("Greater"_("l_orderkey"_, 590741))),
-                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
-               "By"_("l_orderkey"_), 10));
-    queries.try_emplace(
-        SIMPLE_Q3_INT_SELECT_1_AND_AGG,
-        "Top"_("Group"_("Select"_("Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_)),
-                                  "Where"_("Greater"_(290713, "o_orderkey"_))),
-                        "By"_("o_orderkey"_), "As"_("count"_, "Count"_("*"_))),
-               "By"_("o_orderkey"_), 10));
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_)),
+                                  "Where"_("Greater"_("l_quantity"_, 49))),
+                        "By"_("l_quantity"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_quantity"_), 10));
     queries.try_emplace(
         SIMPLE_Q3_INT_SELECT_2_AND_AGG,
-        "Top"_("Group"_("Select"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_)),
-                                  "Where"_("Greater"_(3111, "c_custkey"_))),
-                        "By"_("c_custkey"_), "As"_("count"_, "Count"_("*"_))),
-               "By"_("c_custkey"_), 10));
+        "Top"_("Group"_("Select"_("Project"_("CUSTOMER"_, "As"_("c_nationkey"_, "c_nationkey"_)),
+                                  "Where"_("Greater"_(5, "c_nationkey"_))),
+                        "By"_("c_nationkey"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("c_nationkey"_), 10));
     queries.try_emplace(
         SIMPLE_Q3_INT_SELECT_3_AND_AGG,
-        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_)),
-                                  "Where"_("Greater"_(505600, "l_orderkey"_))),
-                        "By"_("l_orderkey"_), "As"_("count"_, "Count"_("*"_))),
-               "By"_("l_orderkey"_), 10));
+        "Top"_("Group"_("Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_)),
+                                  "Where"_("Greater"_(42, "l_quantity"_))),
+                        "By"_("l_quantity"_), "As"_("count"_, "Count"_("*"_))),
+               "By"_("l_quantity"_), 10));
   }
   return queries;
 }
@@ -1554,12 +1541,10 @@ void initAndRunBenchmarks(int argc, char** argv) {
               SIMPLE_Q3_SELECT_3_AND_AGG,
               SIMPLE_Q1_INT_SELECT_HIGH_CARD,
               SIMPLE_Q1_INT_SELECT_LOW_CARD,
-              SIMPLE_Q3_INT_SELECT_1,
               SIMPLE_Q3_INT_SELECT_2,
               SIMPLE_Q3_INT_SELECT_3,
               SIMPLE_Q1_INT_SELECT_HIGH_CARD_AND_AGG,
               SIMPLE_Q1_INT_SELECT_LOW_CARD_AND_AGG,
-              SIMPLE_Q3_INT_SELECT_1_AND_AGG,
               SIMPLE_Q3_INT_SELECT_2_AND_AGG,
               SIMPLE_Q3_INT_SELECT_3_AND_AGG,
           }) {
