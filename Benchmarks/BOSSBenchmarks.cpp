@@ -308,6 +308,10 @@ enum SIMPLE_QUERIES {
   SIMPLE_Q3_SELECT_2,               // select extracted from TCP-H Q3 (second one)
   SIMPLE_Q3_SELECT_3,               // select extracted from TCP-H Q3 (third one)
 
+  SIMPLE_Q6_NESTED_SELECT_1, // select predicate extracted from TCP-H Q6 Nested Select (first one)
+  SIMPLE_Q6_NESTED_SELECT_2, // select predicate extracted from TCP-H Q6 Nested Select (second one)
+  SIMPLE_Q6_NESTED_SELECT_3, // select predicate extracted from TCP-H Q6 Nested Select (third one)
+
   // same ones but with aggregates too
   SIMPLE_Q1_SELECT_HIGH_CARD_AND_AGG,
   SIMPLE_Q1_SELECT_LOW_CARD_AND_AGG,
@@ -348,6 +352,9 @@ static auto& queryNames() {
     names.try_emplace(SIMPLE_Q3_SELECT_1, "SIMPLE_Q3_SELECT1");
     names.try_emplace(SIMPLE_Q3_SELECT_2, "SIMPLE_Q3_SELECT2");
     names.try_emplace(SIMPLE_Q3_SELECT_3, "SIMPLE_Q3_SELECT3");
+    names.try_emplace(SIMPLE_Q6_NESTED_SELECT_1, "SIMPLE_Q6_NESTED-SELECT1");
+    names.try_emplace(SIMPLE_Q6_NESTED_SELECT_2, "SIMPLE_Q6_NESTED-SELECT2");
+    names.try_emplace(SIMPLE_Q6_NESTED_SELECT_3, "SIMPLE_Q6_NESTED-SELECT3");
     names.try_emplace(SIMPLE_Q1_SELECT_HIGH_CARD_AND_AGG, "SIMPLE_Q1_SELECT-HIGH-CARD-AND-AGG");
     names.try_emplace(SIMPLE_Q1_SELECT_LOW_CARD_AND_AGG, "SIMPLE_Q1_SELECT-LOW-CARD-AND-AGG");
     names.try_emplace(SIMPLE_Q3_SELECT_1_AND_AGG, "SIMPLE_Q3_SELECT1-AND-AGG");
@@ -839,6 +846,19 @@ static auto& bossQueries() {
         "Select"_("Project"_("LINEITEM"_,
                              "As"_("l_orderkey"_, "l_orderkey"_, "l_shipdate"_, "l_shipdate"_)),
                   "Where"_("Greater"_("l_shipdate"_, "DateObject"_("1993-03-15")))));
+
+    queries.try_emplace(SIMPLE_Q6_NESTED_SELECT_1,
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_)),
+                                  "Where"_("Greater"_(24, "l_quantity"_)))); // NOLINT
+    queries.try_emplace(SIMPLE_Q6_NESTED_SELECT_2,
+                        "Select"_("Project"_("LINEITEM"_, "As"_("l_discount"_, "l_discount"_)),
+                                  "Where"_("And"_("Greater"_("l_discount"_, 0.0499),      // NOLINT
+                                                  "Greater"_(0.07001, "l_discount"_))))); // NOLINT
+    queries.try_emplace(
+        SIMPLE_Q6_NESTED_SELECT_3,
+        "Select"_("Project"_("LINEITEM"_, "As"_("l_shipdate"_, "l_shipdate"_)),
+                  "Where"_("And"_("Greater"_("DateObject"_("1995-01-01"), "l_shipdate"_),
+                                  "Greater"_("l_shipdate"_, "DateObject"_("1993-12-31"))))));
 
     // simple selection + aggregation
     queries.try_emplace(
@@ -1534,6 +1554,9 @@ void initAndRunBenchmarks(int argc, char** argv) {
               SIMPLE_Q3_SELECT_1,
               SIMPLE_Q3_SELECT_2,
               SIMPLE_Q3_SELECT_3,
+              SIMPLE_Q6_NESTED_SELECT_1,
+              SIMPLE_Q6_NESTED_SELECT_2,
+              SIMPLE_Q6_NESTED_SELECT_3,
               SIMPLE_Q1_SELECT_HIGH_CARD_AND_AGG,
               SIMPLE_Q1_SELECT_LOW_CARD_AND_AGG,
               SIMPLE_Q3_SELECT_1_AND_AGG,
