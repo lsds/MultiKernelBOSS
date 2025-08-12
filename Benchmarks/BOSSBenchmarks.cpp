@@ -589,14 +589,14 @@ static auto& bossQueries() {
                     "Join"_(
                         "Project"_(
                             "Join"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_)),
-                                    "Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_,
-                                                                "o_custkey"_, "o_custkey"_,
-                                                                "o_orderdate"_, "o_orderdate"_,
-                                                                "o_totalprice"_, "o_totalprice"_)),
+                                    "Project"_("ORDERS"_,
+                                               "As"_("o_orderkey"_, "o_orderkey"_, "o_custkey"_,
+                                                     "o_custkey"_, "o_orderdate"_, "o_orderdate"_,
+                                                     "o_totalprice"_, "o_totalprice"_)),
                                     "Where"_("Equal"_("c_custkey"_, "o_custkey"_))),
                             "As"_("o_orderkey"_, "o_orderkey"_, "o_custkey"_, "o_custkey"_,
                                   "o_orderdate"_, "o_orderdate"_, "o_totalprice"_,
-                                  "o_totalprice"_)),                        
+                                  "o_totalprice"_)),
                         "Select"_(
                             "Group"_("Project"_("LINEITEM"_, "As"_("l_orderkey"_, "l_orderkey"_,
                                                                    "l_quantity"_, "l_quantity"_)),
@@ -652,23 +652,25 @@ static auto& bossQueries() {
                     "Join"_(
                         "Project"_(
                             "Select"_(
-                                "Project"_(
-                                    "Join"_("Project"_("CUSTOMER"_,
-                                                       "As"_("c_custkey"_, "c_custkey"_,
-                                                             "c_mktsegment"_, "c_mktsegment"_)),
-                                            "Project"_("ORDERS"_,
-                                                       "As"_("o_orderkey"_, "o_orderkey"_,
-                                                             "o_orderdate"_, "o_orderdate"_,
-                                                             "o_custkey"_, "o_custkey"_,
-                                                             "o_shippriority"_, "o_shippriority"_)),
-                                            "Where"_("Equal"_("c_custkey"_, "o_custkey"_))),
-                                    "As"_("c_mktsegment"_, "c_mktsegment"_, "o_orderkey"_,
-                                          "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
-                                          "o_custkey"_, "o_custkey"_, "o_shippriority"_,
-                                          "o_shippriority"_)),
-                                "Where"_("And"_(
-                                    "StringContainsQ"_("c_mktsegment"_, "BUILDING"),
-                                    "Greater"_("DateObject"_("1995-03-15"), "o_orderdate"_)))),
+                                "Select"_(
+                                    "Project"_(
+                                        "Join"_("Project"_("CUSTOMER"_,
+                                                           "As"_("c_custkey"_, "c_custkey"_,
+                                                                 "c_mktsegment"_,
+                                                                 "c_mktsegment"_)),
+                                                "Project"_("ORDERS"_,
+                                                           "As"_("o_orderkey"_, "o_orderkey"_,
+                                                                 "o_orderdate"_, "o_orderdate"_,
+                                                                 "o_custkey"_, "o_custkey"_,
+                                                                 "o_shippriority"_,
+                                                                 "o_shippriority"_)),
+                                                "Where"_("Equal"_("c_custkey"_, "o_custkey"_))),
+                                        "As"_("c_mktsegment"_, "c_mktsegment"_, "o_orderkey"_,
+                                              "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
+                                              "o_custkey"_, "o_custkey"_, "o_shippriority"_,
+                                              "o_shippriority"_)),
+                                    "Where"_("StringContainsQ"_("c_mktsegment"_, "BUILDING"))),
+                                "Where"_("Greater"_("DateObject"_("1995-03-15"), "o_orderdate"_))),
                             "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
                                   "o_shippriority"_, "o_shippriority"_)),
                         "Project"_(
@@ -725,8 +727,8 @@ static auto& bossQueries() {
                                           "l_extendedprice"_, "l_extendedprice"_, "o_orderdate"_,
                                           "o_orderdate"_, "o_shippriority"_, "o_shippriority"_,
                                           "c_mktsegment"_, "c_mktsegment"_)),
-                                "Where"_("Greater"_("DateObject"_("1995-03-15"), "o_orderdate"_))),
-                            "Where"_("StringContainsQ"_("c_mktsegment"_, "BUILDING"))),
+                                "Where"_("StringContainsQ"_("c_mktsegment"_, "BUILDING"))),
+                            "Where"_("Greater"_("DateObject"_("1995-03-15"), "o_orderdate"_))),
                         "Where"_("Greater"_("l_shipdate"_, "DateObject"_("1993-03-15")))),
                     "As"_("expr1009"_, "Times"_("l_extendedprice"_, "Minus"_(1.0, "l_discount"_)),
                           "l_extendedprice"_, "l_extendedprice"_, "l_orderkey"_, "l_orderkey"_,
@@ -738,16 +740,18 @@ static auto& bossQueries() {
         TPCH_Q6_NESTED_SELECT,
         "Group"_(
             "Project"_(
-                "Select"_("Select"_("Select"_("Project"_(
-                                                  "LINEITEM"_,
-                                                  "As"_("l_quantity"_, "l_quantity"_, "l_discount"_,
-                                                        "l_discount"_, "l_shipdate"_, "l_shipdate"_,
-                                                        "l_extendedprice"_, "l_extendedprice"_)),
-                                              "Where"_("Greater"_(24, "l_quantity"_))),    // NOLINT
-                                    "Where"_("And"_("Greater"_("l_discount"_, 0.0499),     // NOLINT
-                                                    "Greater"_(0.07001, "l_discount"_)))), // NOLINT
-                          "Where"_("And"_("Greater"_("DateObject"_("1995-01-01"), "l_shipdate"_),
-                                          "Greater"_("l_shipdate"_, "DateObject"_("1993-12-31"))))),
+                "Select"_(
+                    "Select"_(
+                        "Select"_("Project"_("LINEITEM"_,
+                                             "As"_("l_quantity"_, "l_quantity"_, "l_discount"_,
+                                                   "l_discount"_, "l_shipdate"_, "l_shipdate"_,
+                                                   "l_extendedprice"_, "l_extendedprice"_)),
+                                  "Where"_("And"_(
+                                      "Greater"_("DateObject"_("1995-01-01"), "l_shipdate"_),
+                                      "Greater"_("l_shipdate"_, "DateObject"_("1993-12-31"))))),
+                        "Where"_("And"_("Greater"_("l_discount"_, 0.0499),     // NOLINT
+                                        "Greater"_(0.07001, "l_discount"_)))), // NOLINT
+                    "Where"_("Greater"_(24, "l_quantity"_))),                  // NOLINT
                 "As"_("revenue"_, "Times"_("l_extendedprice"_, "l_discount"_))),
             "Sum"_("revenue"_)));
     queries.try_emplace(
@@ -1525,9 +1529,9 @@ void initAndRunBenchmarks(int argc, char** argv) {
              ? std::vector<int64_t>{1 << 25, 1 << 26, 1 << 27, 1 << 28, 1 << 29, 1 << 30,
                                     std::numeric_limits<int32_t>::max()}
              : std::vector<int64_t>{DEFAULT_STORAGE_BLOCK_SIZE})) {
-      for(auto queryIdx :
-          std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN, TPCH_Q3_POSTFILTER_2JOINS,
-                           TPCH_Q6_NESTED_SELECT, TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
+      for(auto queryIdx : std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN,
+                                           TPCH_Q3_POSTFILTER_2JOINS, TPCH_Q6_NESTED_SELECT,
+                                           TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
         std::ostringstream testName;
         auto const& queryName = queryNames()[queryIdx];
         testName << queryName << "/BOSS/";
