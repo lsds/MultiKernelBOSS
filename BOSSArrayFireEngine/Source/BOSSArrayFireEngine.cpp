@@ -1443,7 +1443,7 @@ public:
       auto predExpr = std::move(*++it);
       if(properties().disableGather || !std::holds_alternative<Pred>(predExpr)) {
         // return unevaluated
-        return "SelectToGather"_(std::move(relation), std::move(predExpr));
+        return "Select"_(std::move(relation), std::move(predExpr));
       }
       ExpressionSpanArguments previousPositionSpans{};
       if(relation.getHead().getName() == "Gather") {
@@ -1453,7 +1453,7 @@ public:
         relation = boss::get<ComplexExpression>(std::move(dynamics[0]));
       } else if(relation.getHead().getName() != "Table") {
         // return unevaluated
-        return "SelectToGather"_(std::move(relation), std::move(predExpr));
+        return "Select"_(std::move(relation), std::move(predExpr));
       }
       auto predFunc = boss::get<Pred>(std::move(predExpr));
       auto columns = std::move(relation).getDynamicArguments();
@@ -1495,7 +1495,7 @@ public:
           newRelation = ComplexExpression("Gather"_, {}, std::move(dynamics),
                                           std::move(previousPositionSpans));
         }
-        return "SelectToGather"_(std::move(newRelation), "Where"_(std::move(predFunc)));
+        return "Select"_(std::move(newRelation), "Where"_(std::move(predFunc)));
       };
       if(!canEvaluateSelect) {
         // return unevaluated
