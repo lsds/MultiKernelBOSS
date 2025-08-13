@@ -1,0 +1,3 @@
+[submodule "query-explorer"]
+	path = query-explorer
+	url = https://github.com/dudimasala/boss-query-optimizer.git

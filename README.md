@@ -27,6 +27,9 @@ PATH=$PATH:/usr/local/cuda-12.0/bin
 ldconfig
 ```
 
+## Install Xerces
+Follow the instructions on https://github.com/greenplum-db/gp-xerces-archive
+
 ## Get the benchmark code
 ```
 git clone https://github.com/lsds/MultiKernelBOSS.git
@@ -67,6 +70,15 @@ GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks
 GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --disable-constraints --library libBOSSArrowStorage.so --library libBOSSVeloxEngine.so --benchmark_filter=TPC-H_Q18/BOSS/1000MB
 ```
 
+* Velox using the optimizer with SF 1:
+```
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --disable-constraints --library libBOSSArrowStorage.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxStorage.so --benchmark_filter=TPC-H_Q1_UNOPTIMIZED/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --disable-constraints --library libBOSSArrowStorage.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxStorage.so --benchmark_filter=TPC-H_Q3_UNOPTIMIZED/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --disable-constraints --library libBOSSArrowStorage.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxStorage.so --benchmark_filter=TPC-H_Q6_UNOPTIMIZED/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --disable-constraints --library libBOSSArrowStorage.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxStorage.so --benchmark_filter=TPC-H_Q9_UNOPTIMIZED/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --disable-constraints --library libBOSSArrowStorage.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxStorage.so --benchmark_filter=TPC-H_Q18_UNOPTIMIZED/BOSS/1000MB
+```
+
 * MonetDB and DuckDB with SF 1:
 ```
 GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --fixed-point-numeric-type --benchmark_filter=TPC-H_Q[0-9]+/MonetDB/1000MB
@@ -91,6 +103,15 @@ GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks
 GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --benchmark_filter=TPC-H_Q18/BOSS/1000MB
 ```
 
+* BOSS (GPU) with optimizer with SF 1:
+```
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q1/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q3V_POST-FILTER-2JOINS/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q6/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q9V_POST-FILTER-AND-PRIORITY/BOSS/1000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q18/BOSS/1000MB
+```
+
 * ArrayFire partial evaluation with SF 1:
 ```
 GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --ignore-errors --default-storage-block-size 268435456 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q1/BOSS/1000MB
@@ -107,6 +128,15 @@ GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks
 GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 11000 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --benchmark_filter=TPC-H_Q6V_NESTED-SELECT2/100000MB
 GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 12000 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --benchmark_filter=TPC-H_Q9V_POST-FILTER-AND-PRIORITY/100000MB
 GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 12000 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --benchmark_filter=TPC-H_Q18/100000MB
+```
+
+* BOSS (GPU) with optimizer with SF 100:
+```
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 12000 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q1/100000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 8500 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q3V_POST-FILTER-1JOIN/100000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 11000 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q6V_NESTED-SELECT2/100000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 12000 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q9V_POST-FILTER-AND-PRIORITY/100000MB
+GLOG_minloglevel=2 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu;../lib ./Benchmarks --default-storage-block-size 268435456 --max-gpu-memory-cache 12000 --library libBOSSArrowStorage.so --library libBOSSArrayFireEngineGPU.so --library libBOSSVeloxEngine.so --optimize-for libBOSSVeloxEngine.so --optimize-for libBOSSArrayFireEngineGPU.so --benchmark_filter=TPC-H_Q18/100000MB
 ```
 
 * BOSS (GPU) with various maximum allowed GPU memory on TPC-H Q6 with SF 100:

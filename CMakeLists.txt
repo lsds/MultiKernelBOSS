@@ -160,6 +160,58 @@ if(WIN32)
 	)
 endif(WIN32)
 
+####################### OPTIMIZER #####################
+# Add ORCA (your forked version)
+add_subdirectory(query-explorer)
+
+# Add the integration layer (compiled as C++17)
+add_subdirectory(integration)
+
+# Link the integration library to ORCA (assuming ORCA defines a target named "orca")
+#target_link_libraries(gpopt integration_lib)
+
+# Export build information for external modules like orcaextender
+set(BOSS_EXPLORER_SOURCE_DIR ${CMAKE_SOURCE_DIR} CACHE PATH "Path to the main source directory")
+set(BOSS_EXPLORER_BUILD_DIR ${CMAKE_BINARY_DIR} CACHE PATH "Path to the main build directory")
+
+# Create the directory for the build info file if it doesn't exist
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/cmake)
+
+# Write build info to a file that can be included by other projects
+file(WRITE ${CMAKE_BINARY_DIR}/cmake/BuildInfo.cmake
+"# Build information for BOSS Explorer
+set(BOSS_EXPLORER_SOURCE_DIR \"${CMAKE_SOURCE_DIR}\")
+set(BOSS_EXPLORER_BUILD_DIR \"${CMAKE_BINARY_DIR}\")
+
+# Library paths
+set(GPOPT_LIB \"${CMAKE_BINARY_DIR}/query-explorer/libgpopt/libgpopt.so\")
+set(GPOPTEXTENDER_LIB \"${CMAKE_BINARY_DIR}/query-explorer/libgpoptextender/libgpoptextender.so\")
+set(GPDBCOST_LIB \"${CMAKE_BINARY_DIR}/query-explorer/libgpdbcost/libgpdbcost.so\")
+set(NAUCRATES_LIB \"${CMAKE_BINARY_DIR}/query-explorer/libnaucrates/libnaucrates.so\")
+set(GPOS_LIB \"${CMAKE_BINARY_DIR}/query-explorer/libgpos/libgpos.so\")
+set(CTOBOSS_LIB \"${CMAKE_BINARY_DIR}/integration/CExpressionToBOSS/libctoboss_utils.so\")
+set(BOSSTOC_LIB \"${CMAKE_BINARY_DIR}/integration/BOSSToCExpression/libbosstoc_utils.so\")
+
+# Include directories
+set(BOSS_EXPLORER_INCLUDE_DIRS
+  \"${CMAKE_SOURCE_DIR}/integration/OrcaExtender/include\"
+  \"${CMAKE_SOURCE_DIR}/BOSS/Source\"
+  \"${CMAKE_SOURCE_DIR}/query-explorer/libgpdbcost/include\"
+  \"${CMAKE_SOURCE_DIR}/query-explorer/libgpopt/include\"
+  \"${CMAKE_SOURCE_DIR}/query-explorer/libgpoptextender/include\"
+  \"${CMAKE_SOURCE_DIR}/query-explorer/libnaucrates/include\"
+  \"${CMAKE_SOURCE_DIR}/query-explorer/libgpos/include\"
+  \"${CMAKE_BINARY_DIR}/query-explorer/libgpos/include\"
+  \"${CMAKE_SOURCE_DIR}/integration/CExpressionToBOSS/include\"
+  \"${CMAKE_SOURCE_DIR}/integration/BOSSToCExpression/include\"
+)
+")
+
+####################### Optimization Engines #######################
+set(BOSS_EXPLORER_SOURCE_DIR ${CMAKE_SOURCE_DIR})
+add_subdirectory(optimization-engines)
+
+
 ####################### Other Options and Library Dependencies #######################
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -202,6 +254,18 @@ endif(ITT_NOTIFY_INCLUDE_DIR)
 set(BenchmarkFiles Benchmarks/BOSSBenchmarks.cpp)
 
 add_executable(Benchmarks ${ImplementationFiles} ${BenchmarkFiles})
+target_include_directories(Benchmarks PRIVATE 
+    ${CMAKE_SOURCE_DIR}/integration/Optimizer/include
+    ${CMAKE_SOURCE_DIR}/integration/BOSSToCExpression/include
+    ${CMAKE_SOURCE_DIR}/integration/CExpressionToBOSS/include
+    ${CMAKE_SOURCE_DIR}/query-explorer/libgpopt/include
+    ${CMAKE_SOURCE_DIR}/query-explorer/libgpos/include
+    ${CMAKE_SOURCE_DIR}/query-explorer/libnaucrates/include
+    ${CMAKE_SOURCE_DIR}/query-explorer/libgpdbcost/include
+    ${CMAKE_SOURCE_DIR}/query-explorer/libgpoptextender/include
+    ${CMAKE_SOURCE_DIR}/query-explorer/server/include
+    ${CMAKE_BINARY_DIR}/query-explorer/libgpos/include
+)
 target_link_libraries(Benchmarks Threads::Threads)
 target_link_libraries(Benchmarks ${CXX_FILESYSTEM_LIBRARIES})
 if(WIN32)
@@ -219,6 +283,17 @@ add_dependencies(Benchmarks BOSSArrowStorage)
 add_dependencies(Benchmarks BOSSArrayFireEngineCPU)
 add_dependencies(Benchmarks BOSSArrayFireEngineGPU)
 add_dependencies(Benchmarks BOSSVeloxEngine)
+target_link_libraries(Benchmarks 
+    gpopt
+    gpoptextender
+    gpdbcost
+    naucrates
+    gpos
+    ctoboss_utils
+    bosstoc_utils
+    server_utils
+    optimizer
+)
 if(WIN32)
   add_dependencies(Benchmarks copyBossDLLs)
 endif(WIN32)

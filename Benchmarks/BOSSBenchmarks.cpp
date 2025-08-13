@@ -1,6 +1,7 @@
 #include "DuckDB.hpp"
 #include "ITTNotifySupport.hpp"
 #include "MonetDB.hpp"
+#include "Optimizer.hpp"
 #include <BOSS.hpp>
 #include <ExpressionUtilities.hpp>
 #include <benchmark/benchmark.h>
@@ -80,10 +81,23 @@ static bool BENCHMARK_DATA_COPY_OUT = false;
 enum DB_ENGINE { ENGINE_START = 0, BOSS = ENGINE_START, MONETDB, DUCKDB, ENGINE_END };
 static auto const DBEngineNames = std::vector<string>{"BOSS", "MonetDB", "DuckDB"};
 
+static auto const VeloxPath = "libBOSSVeloxEngine.so";
+static auto const ArrayFireGPUPath = "libBOSSArrayFireEngineGPU.so";
+
+static auto const OptEngineMap = std::unordered_map<string, string>{
+  {VeloxPath, "../build/optimization-engines/Velox/libBOSSVelox.so"},
+  {ArrayFireGPUPath, "../build/optimization-engines/ArrayFire/libBOSSArrayFire.so"}
+};
+
 static auto& librariesToTest() {
   static std::vector<string> libraries;
   return libraries;
 };
+
+static auto& librariesToOptimize() {
+  static std::vector<string> libraries;
+  return libraries;  
+}
 
 static void resetBOSSEngine() {
   auto eval = [](auto&& expression) {
@@ -293,12 +307,12 @@ static void releaseBOSSEngine() {
 enum TPCH_QUERIES { TPCH_Q1 = 1, TPCH_Q3 = 3, TPCH_Q6 = 6, TPCH_Q9 = 9, TPCH_Q18 = 18 };
 
 enum TPCH_VARIANTS {
-  TPCH_Q1_POSTFILTER = 50,         // projection before selection
-  TPCH_Q3_POSTFILTER_1JOIN,        // post-filter 1st join (when only 1st join fits in GPU memory)
-  TPCH_Q3_POSTFILTER_2JOINS,       // post-filter both joins (when both joins fit in GPU memory)
-  TPCH_Q6_NESTED_SELECT,           // nest select ops with single predicates (using 3-stage filter)
-  TPCH_Q6_NESTED_SELECT_INTERSECT, // same but with intersecting positions and a single filter
-  TPCH_Q9_POSTFILTER_PRIORITY,     // post-filter 3rd join + priority on lineitem x order
+  TPCH_Q1_POSTFILTER = 50,     // projection before selection
+  TPCH_Q3_POSTFILTER_1JOIN,    // post-filter 1st join (when only 1st join fits in GPU memory)
+  TPCH_Q3_POSTFILTER_2JOINS,   // post-filter both joins (when both joins fit in GPU memory)
+  TPCH_Q6_NESTED_SELECT,       // nest select ops with single predicates
+  TPCH_Q6_NESTED_SELECT_INTERSECT,
+  TPCH_Q9_POSTFILTER_PRIORITY, // post-filter 3rd join + priority on lineitem x order
   TPCH_Q18_ALT_JOIN_ORDER,
 };
 
@@ -331,6 +345,16 @@ enum SIMPLE_QUERIES {
   SIMPLE_Q3_INT_SELECT_3_AND_AGG,
 };
 
+
+enum UNOPTIMIZED_QUERIES {
+  TPCH_Q1_UNOPTIMIZED = 200,
+  TPCH_Q3_UNOPTIMIZED,
+  TPCH_Q6_UNOPTIMIZED,
+  TPCH_Q9_UNOPTIMIZED,
+  TPCH_Q18_UNOPTIMIZED
+};
+
+
 static auto& queryNames() {
   static std::map<int, std::string> names;
   if(names.empty()) {
@@ -345,7 +369,7 @@ static auto& queryNames() {
     names.try_emplace(TPCH_Q3_POSTFILTER_1JOIN, "TPC-H_Q3V_POST-FILTER-1JOIN");
     names.try_emplace(TPCH_Q3_POSTFILTER_2JOINS, "TPC-H_Q3V_POST-FILTER-2JOINS");
     names.try_emplace(TPCH_Q6_NESTED_SELECT, "TPC-H_Q6V_NESTED-SELECT");
-    names.try_emplace(TPCH_Q6_NESTED_SELECT_INTERSECT, "TPC-H_Q6V_NESTED-SELECT-INTERSECT");
+    names.try_emplace(TPCH_Q6_NESTED_SELECT_INTERSECT, "TPC-H_Q6V_NESTED-SELECT-INTERSECT");    
     names.try_emplace(TPCH_Q9_POSTFILTER_PRIORITY, "TPC-H_Q9V_POST-FILTER-AND-PRIORITY");
     names.try_emplace(TPCH_Q18_ALT_JOIN_ORDER, "TPC-H_Q18V_ALT-JOIN-ORDER");
     // Simple queries (i.e., breakdowns)
@@ -373,6 +397,12 @@ static auto& queryNames() {
                       "SIMPLE_Q1_INT_SELECT-LOW-CARD-AND-AGG");
     names.try_emplace(SIMPLE_Q3_INT_SELECT_2_AND_AGG, "SIMPLE_Q3_INT_SELECT2-AND-AGG");
     names.try_emplace(SIMPLE_Q3_INT_SELECT_3_AND_AGG, "SIMPLE_Q3_INT_SELECT3-AND-AGG");
+
+    names.try_emplace(TPCH_Q1_UNOPTIMIZED, "TPC-H_Q1_UNOPTIMIZED");
+    names.try_emplace(TPCH_Q3_UNOPTIMIZED, "TPC-H_Q3_UNOPTIMIZED");
+    names.try_emplace(TPCH_Q6_UNOPTIMIZED, "TPC-H_Q6_UNOPTIMIZED");
+    names.try_emplace(TPCH_Q9_UNOPTIMIZED, "TPC-H_Q9_UNOPTIMIZED");
+    names.try_emplace(TPCH_Q18_UNOPTIMIZED, "TPC-H_Q18_UNOPTIMIZED");    
   }
   return names;
 }
@@ -465,7 +495,7 @@ static auto& bossQueries() {
         TPCH_Q6,
         "Group"_(
             "Project"_(
-                "Select"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_, "l_discount"_,
+                "SelectToGather"_("Project"_("LINEITEM"_, "As"_("l_quantity"_, "l_quantity"_, "l_discount"_,
                                                         "l_discount"_, "l_shipdate"_, "l_shipdate"_,
                                                         "l_extendedprice"_, "l_extendedprice"_)),
                           "Where"_("And"_("Greater"_(24, "l_quantity"_),      // NOLINT
@@ -648,49 +678,7 @@ static auto& bossQueries() {
             "By"_("l_returnflag"_, "l_linestatus"_)));
     queries.try_emplace(
         TPCH_Q3_POSTFILTER_1JOIN,
-        "Top"_(
-            "Group"_(
-                "Project"_(
-                    "Join"_(
-                        "Project"_(
-                            "Select"_(
-                                "Select"_(
-                                    "Project"_(
-                                        "Join"_("Project"_("CUSTOMER"_,
-                                                           "As"_("c_custkey"_, "c_custkey"_,
-                                                                 "c_mktsegment"_,
-                                                                 "c_mktsegment"_)),
-                                                "Project"_("ORDERS"_,
-                                                           "As"_("o_orderkey"_, "o_orderkey"_,
-                                                                 "o_orderdate"_, "o_orderdate"_,
-                                                                 "o_custkey"_, "o_custkey"_,
-                                                                 "o_shippriority"_,
-                                                                 "o_shippriority"_)),
-                                                "Where"_("Equal"_("c_custkey"_, "o_custkey"_))),
-                                        "As"_("c_mktsegment"_, "c_mktsegment"_, "o_orderkey"_,
-                                              "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
-                                              "o_custkey"_, "o_custkey"_, "o_shippriority"_,
-                                              "o_shippriority"_)),
-                                    "Where"_("StringContainsQ"_("c_mktsegment"_, "BUILDING"))),
-                                "Where"_("Greater"_("DateObject"_("1995-03-15"), "o_orderdate"_))),
-                            "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_,
-                                  "o_shippriority"_, "o_shippriority"_)),
-                        "Project"_(
-                            "Select"_(
-                                "Project"_("LINEITEM"_,
-                                           "As"_("l_orderkey"_, "l_orderkey"_, "l_discount"_,
-                                                 "l_discount"_, "l_shipdate"_, "l_shipdate"_,
-                                                 "l_extendedprice"_, "l_extendedprice"_)),
-                                "Where"_("Greater"_("l_shipdate"_, "DateObject"_("1993-03-15")))),
-                            "As"_("l_orderkey"_, "l_orderkey"_, "l_discount"_, "l_discount"_,
-                                  "l_extendedprice"_, "l_extendedprice"_)),
-                        "Where"_("Equal"_("o_orderkey"_, "l_orderkey"_))),
-                    "As"_("expr1009"_, "Times"_("l_extendedprice"_, "Minus"_(1.0, "l_discount"_)),
-                          "l_extendedprice"_, "l_extendedprice"_, "l_orderkey"_, "l_orderkey"_,
-                          "o_orderdate"_, "o_orderdate"_, "o_shippriority"_, "o_shippriority"_)),
-                "By"_("l_orderkey"_, "o_orderdate"_, "o_shippriority"_),
-                "As"_("revenue"_, "Sum"_("expr1009"_))),
-            "By"_("revenue"_, "desc"_, "o_orderdate"_), 10));
+"Top"_("Group"_("Project"_("Join"_("Project"_("Select"_("Select"_("Project"_("Join"_("Project"_("CUSTOMER"_, "As"_("c_custkey"_, "c_custkey"_, "c_mktsegment"_, "c_mktsegment"_)), "Project"_("ORDERS"_, "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_, "o_custkey"_, "o_custkey"_, "o_shippriority"_, "o_shippriority"_)), "Where"_("Equal"_("c_custkey"_, "o_custkey"_))), "As"_("c_mktsegment"_, "c_mktsegment"_, "o_shippriority"_, "o_shippriority"_, "o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_)), "Where"_("Equal"_("c_mktsegment"_, "BUILDING"))), "Where"_("Greater"_(9204, "o_orderdate"_))), "As"_("o_orderkey"_, "o_orderkey"_, "o_orderdate"_, "o_orderdate"_, "o_shippriority"_, "o_shippriority"_)), "Project"_("SelectToGather"_("Project"_("LINEITEM"_, "As"_("l_discount"_, "l_discount"_, "l_orderkey"_, "l_orderkey"_, "l_extendedprice"_, "l_extendedprice"_, "l_shipdate"_, "l_shipdate"_)), "Where"_("Greater"_("l_shipdate"_, 8474))), "As"_("l_discount"_, "l_discount"_, "l_extendedprice"_, "l_extendedprice"_, "l_orderkey"_, "l_orderkey"_)), "Where"_("Equal"_("o_orderkey"_, "l_orderkey"_))), "As"_("revenue"_, "Times"_("l_extendedprice"_, "Minus"_(1.0, "l_discount"_)), "l_orderkey"_, "l_orderkey"_, "o_shippriority"_, "o_shippriority"_, "o_orderdate"_, "o_orderdate"_)), "By"_("l_orderkey"_, "o_orderdate"_, "o_shippriority"_), "As"_("total_revenue"_, "Sum"_("revenue"_))), "By"_("total_revenue"_, "desc"_, "o_orderdate"_), 10));
     queries.try_emplace(
         TPCH_Q3_POSTFILTER_2JOINS,
         "Top"_(
@@ -742,9 +730,9 @@ static auto& bossQueries() {
         TPCH_Q6_NESTED_SELECT,
         "Group"_(
             "Project"_(
-                "Select"_(
-                    "Select"_(
-                        "Select"_("Project"_("LINEITEM"_,
+                "SelectToGather"_(
+                    "SelectToGather"_(
+                        "SelectToGather"_("Project"_("LINEITEM"_,
                                              "As"_("l_quantity"_, "l_quantity"_, "l_discount"_,
                                                    "l_discount"_, "l_shipdate"_, "l_shipdate"_,
                                                    "l_extendedprice"_, "l_extendedprice"_)),
@@ -961,6 +949,134 @@ static auto& bossQueries() {
                                   "Where"_("Greater"_(42, "l_quantity"_))),
                         "By"_("l_quantity"_), "As"_("count"_, "Count"_("*"_))),
                "By"_("l_quantity"_), 10));
+
+
+
+
+    queries.try_emplace(
+      TPCH_Q1_UNOPTIMIZED,
+      "Order"_(
+        "Group"_(
+          "Project"_(
+              "Project"_(
+                  "Project"_(
+                      "Select"_("LINEITEM"_(),
+                          "Where"_("Greater"_("DateObject"_("1998-08-31"), "l_shipdate"_
+                          ))),
+                      "As"_("calc1"_, "Minus"_(1.0,
+                            "l_discount"_), "calc2"_,
+                            "Plus"_("l_tax"_, 1.0))),
+                "As"_("disc_price"_,
+                    "Times"_("l_extendedprice"_, "calc1"_))),
+              "As"_("calc"_,
+                "Times"_("disc_price"_, "calc2"_))),
+          "By"_("l_returnflag"_, "l_linestatus"_),
+          "As"_("sum_qty"_, "Sum"_("l_quantity"_), "sum_base_price"_,
+            "Sum"_("l_extendedprice"_), "sum_disc_price"_,
+            "Sum"_("disc_price"_), "sum_charges"_, "Sum"_("calc"_),
+            "avg_qty"_, "Avg"_("l_quantity"_), "avg_price"_,
+            "Avg"_("l_extendedprice"_), "avg_disc"_,
+            "Avg"_("l_discount"_), "count_order"_,
+            "Count"_("*"_))),
+        "By"_("l_returnflag"_, "asc"_, "l_linestatus"_, "asc"_)));
+
+    queries.try_emplace(
+      TPCH_Q3_UNOPTIMIZED,
+      "Top"_(
+        "Group"_(
+            "Project"_(
+                "Join"_("Join"_("Select"_("ORDERS"_(),
+                                        "Where"_("Greater"_("DateObject"_("1995-03-15"),
+                                                            "o_orderdate"_))),
+                                "Select"_("CUSTOMER"_(),
+                                        "Where"_("StringContainsQ"_("c_mktsegment"_,
+                                                                        "BUILDING"))),
+                                "Where"_("Equal"_("c_custkey"_,
+                                    "o_custkey"_))),
+                        "Select"_("LINEITEM"_(),
+                          "Where"_(
+                              "Greater"_("l_shipdate"_,
+                              "DateObject"_("1993-03-15")))),
+                        "Where"_("Equal"_("o_orderkey"_, "l_orderkey"_))),
+                "As"_("revenue"_, "Times"_("l_extendedprice"_, "Minus"_(1.0, "l_discount"_)))),
+            "By"_("l_orderkey"_, "o_orderdate"_, "o_shippriority"_),
+            "As"_("total_revenue"_, "Sum"_("revenue"_))),
+        "By"_("total_revenue"_, "desc"_, "o_orderdate"_, "asc"_),
+        10));
+
+      queries.try_emplace(
+        TPCH_Q6_UNOPTIMIZED,
+        "Group"_(
+        "Project"_(
+          "Select"_(
+              "LINEITEM"_(),
+              "Where"_("And"_(
+                  "Greater"_(24, "l_quantity"_),       // l_quantity < 24
+                  "Greater"_("l_discount"_, 0.0499),   // l_discount > 0.0499
+                  "Greater"_(0.07001, "l_discount"_),  // l_discount < 0.07001
+                  "Greater"_("DateObject"_("1995-01-01"),
+                             "l_shipdate"_),  // l_shipdate < '1995-01-01'
+                  "Greater"_("l_shipdate"_,
+                             "DateObject"_("1993-12-31"))))),  // l_shipdate >
+                                                               // '1993-12-31'
+            "As"_("revenue"_, "Times"_("l_extendedprice"_, "l_discount"_))),
+          "As"_("sum_revenue"_, "Sum"_("revenue"_))));
+
+      queries.try_emplace(
+        TPCH_Q9_UNOPTIMIZED,
+        "Order"_(
+            "Group"_(
+                "Project"_(
+                    "Join"_("ORDERS"_(),
+                            "Join"_(
+                                    "Join"_(
+                                            "Select"_("PART"_(),
+                                                "Where"_("And"_("Greater"_("p_retailprice"_,
+                                                                           1006.05), // NOLINT
+                                                                "Greater"_(1080.1,   // NOLINT
+                                                                           "p_retailprice"_)))),
+                                            "Join"_(
+                                                    "Join"_("NATION"_(), "SUPPLIER"_(),
+                                                        "Where"_("Equal"_("n_nationkey"_,
+                                                                          "s_nationkey"_))),
+                                                "PARTSUPP"_(),
+                                                "Where"_("Equal"_("s_suppkey"_, "ps_suppkey"_))),
+                                        "Where"_("Equal"_("p_partkey"_, "ps_partkey"_))),
+                                "LINEITEM"_(),
+                                 "Where"_("And"_("Equal"_("ps_partkey"_, "l_partkey"_),
+                                  "Equal"_("ps_suppkey"_, "l_suppkey"_)))),
+                        "Where"_("Equal"_("o_orderkey"_, "l_orderkey"_))),
+                    "As"_("o_year"_, "Year"_("o_orderdate"_), "amount"_,
+                          "Minus"_("Times"_("l_extendedprice"_, "Minus"_(1.0, "l_discount"_)),
+                                   "Times"_("ps_supplycost"_, "l_quantity"_)))),
+                "By"_("n_name"_, "o_year"_), "As"_("sum_amount"_, "Sum"_("amount"_))),
+            "By"_("n_name"_, "asc"_,"o_year"_, "desc"_)));
+    
+      queries.try_emplace(
+        TPCH_Q18_UNOPTIMIZED,
+        "Top"_(
+                  "Group"_(
+                          "Join"_(
+                              // Aggregated LINEITEM with filter
+                              "Select"_(
+                                  "Group"_("LINEITEM"_(),
+                                           "By"_("l_orderkey"_),
+                                           "As"_("sum_l_quantity"_,
+                                           "Sum"_("l_quantity"_))),
+                                  "Where"_("Greater"_("sum_l_quantity"_,
+                                  300))),
+                              // CUSTOMER-ORDERS join
+                                  "Join"_("CUSTOMER"_(),
+                                          "ORDERS"_(),
+                                          "Where"_("Equal"_("c_custkey"_,
+                                          "o_custkey"_))),
+                              "Where"_("Equal"_("l_orderkey"_,
+                              "o_orderkey"_))),
+                      "By"_("o_custkey"_, "o_orderkey"_, "o_orderdate"_,
+                      "o_totalprice"_), "As"_("sum_sum_l_quantity"_,
+                      "Sum"_("sum_l_quantity"_))),
+                  "By"_("o_totalprice"_, "desc"_, "o_orderdate"_, "asc"_),
+                  100));
   }
   return queries;
 }
@@ -1253,7 +1369,46 @@ static void TPCH_BOSS(benchmark::State& state, int queryIdx, int dataSize, int64
   bool failed = false;
 
   auto const& queryName = queryNames().find(queryIdx)->second;
-  auto const& query = bossQueries().find(queryIdx)->second;
+  auto const& initialQuery = bossQueries().find(queryIdx)->second;
+  Expression q = initialQuery.clone();
+  std::string unoptimized = "UNOPTIMIZED";
+
+  if (librariesToOptimize().size() > 0) {
+    if (queryName.find(unoptimized) != std::string::npos) {
+      Optimizer optimizer;
+      optimizer.Init();
+
+      for (auto libraryToOptimize : librariesToOptimize()) {
+        if (OptEngineMap.find(libraryToOptimize) != OptEngineMap.end()) {
+          optimizer.AddLoadLibraryTask(OptEngineMap.at(libraryToOptimize));
+        }
+      }
+
+      std::cout << std::endl; // need this line for printing benchmarks
+
+      optimizer.AddOptimizeQueryTask(initialQuery.clone());
+      std::string mdFile;
+      if (dataSize == 1000) {
+        mdFile = "../query-explorer/data/dxl/metadata/md1.xml";
+      } else if (dataSize == 10000) {
+        mdFile = "../query-explorer/data/dxl/metadata/md10.xml";
+      } else {
+        mdFile = "../query-explorer/data/dxl/metadata/md100.xml";
+      }
+      std::vector<Expression> resultExprs = optimizer.ExecuteTasks(mdFile);
+      q = std::move(resultExprs[resultExprs.size() - 1]);
+      std::cout << "Optimized query: " << q << std::endl;
+    } else {
+      std::cerr << "Query is not in correct format for optimization: executing it unoptimized" << std::endl;
+    }
+  } else {
+    if (queryName.find(unoptimized) != std::string::npos) {
+      std::cerr << "Query is in logical format (input to optimizer) and cannot be executed without specify --optimize-for libs" << std::endl;
+    }
+  }
+
+  auto const& query = q;
+
 
   if(!failed) {
     auto result = eval(query);
@@ -1438,7 +1593,7 @@ template <typename... Args>
 benchmark::internal::Benchmark* RegisterBenchmarkNolint([[maybe_unused]] Args... args) {
 #ifdef __clang_analyzer__
   // There is not way to disable clang-analyzer-cplusplus.NewDeleteLeaks
-  // even though it is perfectly safe. Let's just please clang analyzer.
+  // even though it is perfectly se. Let's just please clang analyzer.
   return nullptr;
 #else
   return benchmark::RegisterBenchmark(args...);
@@ -1516,6 +1671,10 @@ void initAndRunBenchmarks(int argc, char** argv) {
       if(++i < argc) {
         librariesToTest().emplace_back(argv[i]);
       }
+    } else if (std::string("--optimize-for") == argv[i]) {
+      if (++i < argc) {
+        librariesToOptimize().emplace_back(argv[i]);
+      }
     }
   }
   // register TPC-H benchmarks
@@ -1549,10 +1708,9 @@ void initAndRunBenchmarks(int argc, char** argv) {
              ? std::vector<int64_t>{1 << 25, 1 << 26, 1 << 27, 1 << 28, 1 << 29, 1 << 30,
                                     std::numeric_limits<int32_t>::max()}
              : std::vector<int64_t>{DEFAULT_STORAGE_BLOCK_SIZE})) {
-      for(auto queryIdx :
-          std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN, TPCH_Q3_POSTFILTER_2JOINS,
-                           TPCH_Q6_NESTED_SELECT, TPCH_Q6_NESTED_SELECT_INTERSECT,
-                           TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
+      for(auto queryIdx : std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN,
+                                           TPCH_Q3_POSTFILTER_2JOINS, TPCH_Q6_NESTED_SELECT, TPCH_Q6_NESTED_SELECT_INTERSECT,
+                                           TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
         std::ostringstream testName;
         auto const& queryName = queryNames()[queryIdx];
         testName << queryName << "/BOSS/";
@@ -1609,6 +1767,37 @@ void initAndRunBenchmarks(int argc, char** argv) {
       }
     }
   }
+
+  // register unoptimized queries.
+   for(int dataSize : std::vector<int>{1, 10, 100, 1000, 2000, 5000, 10000, 20000, 50000, 100000}) {
+    for(int64_t blockSize :
+        (BENCHMARK_STORAGE_BLOCK_SIZE
+             ? std::vector<int64_t>{1 << 25, 1 << 26, 1 << 27, 1 << 28, 1 << 29, 1 << 30,
+                                    std::numeric_limits<int32_t>::max()}
+             : std::vector<int64_t>{DEFAULT_STORAGE_BLOCK_SIZE})) {
+      for(auto queryIdx : std::vector<int>{
+              TPCH_Q1_UNOPTIMIZED,
+              TPCH_Q3_UNOPTIMIZED,
+              TPCH_Q6_UNOPTIMIZED,
+              TPCH_Q9_UNOPTIMIZED,
+              TPCH_Q18_UNOPTIMIZED
+          }) {
+        std::ostringstream testName;
+        auto const& queryName = queryNames()[queryIdx];
+        testName << queryName << "/BOSS/";
+        testName << dataSize << "MB";
+        if(BENCHMARK_STORAGE_BLOCK_SIZE) {
+          testName << "/";
+          testName << (blockSize >> 20) << "MB";
+        }
+        RegisterBenchmarkNolint(testName.str().c_str(), TPCH_test, BOSS, queryIdx, dataSize,
+                                blockSize);
+      }
+    }
+  } 
+
+
+
   // initialise and run google benchmark
   ::benchmark::Initialize(&argc, argv, ::benchmark::PrintDefaultHelp);
   ::benchmark::RunSpecifiedBenchmarks();
