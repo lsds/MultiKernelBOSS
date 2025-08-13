@@ -34,6 +34,7 @@ Follow the instructions on https://github.com/greenplum-db/gp-xerces-archive
 ```
 git clone https://github.com/lsds/MultiKernelBOSS.git
 cd MultiKernelBOSS
+git submodule update --init --recursive
 ```
 
 ## Generate TPC-H dataset
