@@ -293,11 +293,12 @@ static void releaseBOSSEngine() {
 enum TPCH_QUERIES { TPCH_Q1 = 1, TPCH_Q3 = 3, TPCH_Q6 = 6, TPCH_Q9 = 9, TPCH_Q18 = 18 };
 
 enum TPCH_VARIANTS {
-  TPCH_Q1_POSTFILTER = 50,     // projection before selection
-  TPCH_Q3_POSTFILTER_1JOIN,    // post-filter 1st join (when only 1st join fits in GPU memory)
-  TPCH_Q3_POSTFILTER_2JOINS,   // post-filter both joins (when both joins fit in GPU memory)
-  TPCH_Q6_NESTED_SELECT,       // nest select ops with single predicates
-  TPCH_Q9_POSTFILTER_PRIORITY, // post-filter 3rd join + priority on lineitem x order
+  TPCH_Q1_POSTFILTER = 50,         // projection before selection
+  TPCH_Q3_POSTFILTER_1JOIN,        // post-filter 1st join (when only 1st join fits in GPU memory)
+  TPCH_Q3_POSTFILTER_2JOINS,       // post-filter both joins (when both joins fit in GPU memory)
+  TPCH_Q6_NESTED_SELECT,           // nest select ops with single predicates (using 3-stage filter)
+  TPCH_Q6_NESTED_SELECT_INTERSECT, // same but with intersecting positions and a single filter
+  TPCH_Q9_POSTFILTER_PRIORITY,     // post-filter 3rd join + priority on lineitem x order
   TPCH_Q18_ALT_JOIN_ORDER,
 };
 
@@ -344,6 +345,7 @@ static auto& queryNames() {
     names.try_emplace(TPCH_Q3_POSTFILTER_1JOIN, "TPC-H_Q3V_POST-FILTER-1JOIN");
     names.try_emplace(TPCH_Q3_POSTFILTER_2JOINS, "TPC-H_Q3V_POST-FILTER-2JOINS");
     names.try_emplace(TPCH_Q6_NESTED_SELECT, "TPC-H_Q6V_NESTED-SELECT");
+    names.try_emplace(TPCH_Q6_NESTED_SELECT_INTERSECT, "TPC-H_Q6V_NESTED-SELECT-INTERSECT");
     names.try_emplace(TPCH_Q9_POSTFILTER_PRIORITY, "TPC-H_Q9V_POST-FILTER-AND-PRIORITY");
     names.try_emplace(TPCH_Q18_ALT_JOIN_ORDER, "TPC-H_Q18V_ALT-JOIN-ORDER");
     // Simple queries (i.e., breakdowns)
@@ -752,6 +754,24 @@ static auto& bossQueries() {
                         "Where"_("And"_("Greater"_("l_discount"_, 0.0499),     // NOLINT
                                         "Greater"_(0.07001, "l_discount"_)))), // NOLINT
                     "Where"_("Greater"_(24, "l_quantity"_))),                  // NOLINT
+                "As"_("revenue"_, "Times"_("l_extendedprice"_, "l_discount"_))),
+            "Sum"_("revenue"_)));
+    queries.try_emplace(
+        TPCH_Q6_NESTED_SELECT_INTERSECT,
+        "Group"_(
+            "Project"_(
+                "Select"_("SelectToGather"_(
+                              "SelectToGather"_(
+                                  "Project"_("LINEITEM"_,
+                                             "As"_("l_quantity"_, "l_quantity"_, "l_discount"_,
+                                                   "l_discount"_, "l_shipdate"_, "l_shipdate"_,
+                                                   "l_extendedprice"_, "l_extendedprice"_)),
+                                  "Where"_("And"_(
+                                      "Greater"_("DateObject"_("1995-01-01"), "l_shipdate"_),
+                                      "Greater"_("l_shipdate"_, "DateObject"_("1993-12-31"))))),
+                              "Where"_("And"_("Greater"_("l_discount"_, 0.0499),     // NOLINT
+                                              "Greater"_(0.07001, "l_discount"_)))), // NOLINT
+                          "Where"_("Greater"_(24, "l_quantity"_))),                  // NOLINT
                 "As"_("revenue"_, "Times"_("l_extendedprice"_, "l_discount"_))),
             "Sum"_("revenue"_)));
     queries.try_emplace(
@@ -1529,9 +1549,10 @@ void initAndRunBenchmarks(int argc, char** argv) {
              ? std::vector<int64_t>{1 << 25, 1 << 26, 1 << 27, 1 << 28, 1 << 29, 1 << 30,
                                     std::numeric_limits<int32_t>::max()}
              : std::vector<int64_t>{DEFAULT_STORAGE_BLOCK_SIZE})) {
-      for(auto queryIdx : std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN,
-                                           TPCH_Q3_POSTFILTER_2JOINS, TPCH_Q6_NESTED_SELECT,
-                                           TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
+      for(auto queryIdx :
+          std::vector<int>{TPCH_Q1_POSTFILTER, TPCH_Q3_POSTFILTER_1JOIN, TPCH_Q3_POSTFILTER_2JOINS,
+                           TPCH_Q6_NESTED_SELECT, TPCH_Q6_NESTED_SELECT_INTERSECT,
+                           TPCH_Q9_POSTFILTER_PRIORITY, TPCH_Q18_ALT_JOIN_ORDER}) {
         std::ostringstream testName;
         auto const& queryName = queryNames()[queryIdx];
         testName << queryName << "/BOSS/";
