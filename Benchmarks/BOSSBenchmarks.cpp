@@ -1395,12 +1395,13 @@ static void TPCH_BOSS(benchmark::State& state, int queryIdx, int dataSize, int64
       std::cout << std::endl; // need this line for printing benchmarks
 
       // encode GPU memory constraint
-      int maxGPUCache = -1;
+      int64_t maxGPUCache = -1;
       if (MAX_GPU_MEMORY_CACHE == -1) {
         maxGPUCache = MaxDefaultMemoryConstraint.at(queryName);
       } else {
         maxGPUCache = MAX_GPU_MEMORY_CACHE;
       }
+
 
       maxGPUCache = maxGPUCache * 1024 * 1024;
       optimizer.AddSetMdConfigTask("ArrayFire", CCostModelParamsGPDB::EcpHJSpillingMemThreshold, maxGPUCache, maxGPUCache * 0.5, maxGPUCache * 2.0);
@@ -1420,6 +1421,7 @@ static void TPCH_BOSS(benchmark::State& state, int queryIdx, int dataSize, int64
       // optimize and evaluate
       std::vector<Expression> resultExprs = optimizer.ExecuteTasks(mdFile);
       q = std::move(resultExprs[resultExprs.size() - 1]);
+
       if (VERBOSE_QUERY_OUTPUT) {
         std::cout << "Optimized query: " << q << std::endl;
       }
