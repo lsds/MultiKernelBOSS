@@ -73,6 +73,17 @@ Expression Optimizer::GetOperators(size_t idx) {
 }
 
 
+Expression Optimizer::ConfigMd(size_t idx) {
+  MdConfigArgs* args = static_cast<MdConfigArgs *>(taskArgs[idx]);
+  orcaextender::DynamicRegistry* DynamicRegistry = orcaextender::DynamicRegistry::GetInstance();
+  EEngineType engine = DynamicRegistry->GetEngineType(args->engineName);
+  ICostModelParams* params = DynamicRegistry->GetCostModelParams(engine);
+  params->SetParam(args->id, args->dVal, args->dLowerBound, args->dUpperBound);
+  delete args;
+  return Symbol{"success"};
+}
+
+
 Expression Optimizer::LoadLib(size_t idx) {
   using CreateEngineFn =
       orcaextender::Engine *(*)();

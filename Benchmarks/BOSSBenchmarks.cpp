@@ -89,6 +89,14 @@ static auto const OptEngineMap = std::unordered_map<string, string>{
   {ArrayFireGPUPath, "../build/optimization-engines/ArrayFire/libBOSSArrayFire.so"}
 };
 
+static auto const MaxDefaultMemoryConstraint = std::unordered_map<string, int64_t>{
+  {"TPC-H_Q1_UNOPTIMIZED", 12000},
+  {"TPC-H_Q3_UNOPTIMIZED", 8500},
+  {"TPC-H_Q6_UNOPTIMIZED", 11000},
+  {"TPC-H_Q9_UNOPTIMIZED", 12000},
+  {"TPC-H_Q18_UNOPTIMIZED", 12000}
+};
+
 static auto& librariesToTest() {
   static std::vector<string> libraries;
   return libraries;
@@ -1386,6 +1394,18 @@ static void TPCH_BOSS(benchmark::State& state, int queryIdx, int dataSize, int64
 
       std::cout << std::endl; // need this line for printing benchmarks
 
+      // encode GPU memory constraint
+      int maxGPUCache = -1;
+      if (MAX_GPU_MEMORY_CACHE == -1) {
+        maxGPUCache = MaxDefaultMemoryConstraint.at(queryName);
+      } else {
+        maxGPUCache = MAX_GPU_MEMORY_CACHE;
+      }
+
+      maxGPUCache = maxGPUCache * 1024 * 1024;
+      optimizer.AddSetMdConfigTask("ArrayFire", CCostModelParamsGPDB::EcpHJSpillingMemThreshold, maxGPUCache, maxGPUCache * 0.5, maxGPUCache * 2.0);
+
+
       optimizer.AddOptimizeQueryTask(initialQuery.clone());
       std::string mdFile;
       if (dataSize == 1000) {
@@ -1395,9 +1415,14 @@ static void TPCH_BOSS(benchmark::State& state, int queryIdx, int dataSize, int64
       } else {
         mdFile = "../query-explorer/data/dxl/metadata/md100.xml";
       }
+
+
+      // optimize and evaluate
       std::vector<Expression> resultExprs = optimizer.ExecuteTasks(mdFile);
       q = std::move(resultExprs[resultExprs.size() - 1]);
-      std::cout << "Optimized query: " << q << std::endl;
+      if (VERBOSE_QUERY_OUTPUT) {
+        std::cout << "Optimized query: " << q << std::endl;
+      }
     } else {
       std::cerr << "Query is not in correct format for optimization: executing it unoptimized" << std::endl;
     }

@@ -425,7 +425,7 @@ void ArrayFire::RegisterEngineTransforms() {
       return costChild + CCost(1000000000000, engine);
     });
   } catch (const std::exception& e) {
-    std::cerr << "NEED TO LOAD VELOX BEFORE ARRAYFIRE" << std::endl;
+    std::cerr << "NEED TO LOAD VELOX OPTIMIZER COMPONENTS BEFORE ARRAYFIRE" << std::endl;
     throw;
   }
 }

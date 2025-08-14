@@ -60,7 +60,7 @@ const CDouble CGPUCostModelParams::DJoinFeedingTupWidthCostUnitVal = 6.09e-09;
 const CDouble CGPUCostModelParams::DJoinOutputTupCostUnitVal = 3.50e-08;  
 
 // memory threshold for hash join spilling (in bytes)
-const CDouble CGPUCostModelParams::DHJSpillingMemThresholdVal = 12.0 * 1024.0 * 1024.0 * 1024.0;  // 16GB for GPU memory
+const CDouble CGPUCostModelParams::DHJSpillingMemThresholdVal = 12.0 * 1024.0 * 1024.0 * 1024.0;  // 12GB for GPU memory
 
 // initial cost for building hash table for hash join
 const CDouble CGPUCostModelParams::DHJHashTableInitCostFactorVal = 800.0;  

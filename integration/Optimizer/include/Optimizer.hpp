@@ -168,6 +168,14 @@ class Optimizer {
       taskArgs.push_back(inpArgs);
     }
 
+
+    void AddSetMdConfigTask(const std::string &engineName, ULONG id, CDouble dVal, CDouble dLowerBound, CDouble dUpperBound) {
+      MdConfigArgs *mdConfigArgs = new MdConfigArgs(engineName, id, dVal, dLowerBound, dUpperBound);
+      tasks.push_back(ConfigMd);
+      taskArgs.push_back(mdConfigArgs);
+    }
+
+
     std::vector<Expression> ExecuteTasks(std::string mdFile);
 
   private:
@@ -183,6 +191,15 @@ class Optimizer {
     struct LibArgs {
       LibArgs(std::string libPath) : libPath(libPath) {}
       std::string libPath;
+    };
+
+    struct MdConfigArgs {
+      MdConfigArgs(std::string engineName, ULONG id, CDouble dVal, CDouble dLowerBound, CDouble dUpperBound) : engineName(engineName), id(id), dVal(dVal), dLowerBound(dLowerBound), dUpperBound(dUpperBound) {}
+      std::string engineName;
+      ULONG id;
+      CDouble dVal;
+      CDouble dLowerBound;
+      CDouble dUpperBound;
     };
 
     struct EmptyArgs {};
@@ -211,6 +228,8 @@ class Optimizer {
     static Expression UnloadLib(size_t idx);
 
     static Expression GetOperators(size_t idx);
+
+    static Expression ConfigMd(size_t idx);
 
     static Expression Optimize(size_t idx) {
       InpArgs *inpArgs = static_cast<InpArgs *>(taskArgs[idx]);
