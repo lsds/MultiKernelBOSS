@@ -265,7 +265,7 @@ class Optimizer {
         // CWStringDynamic str(mp);
         // COstreamString oss(&str);
         // convertedExpr->OsPrint(oss);
-        // wprintf(L"Converted Expr:\n%ls\n", str.GetBuffer());
+        // std::wcout << str.GetBuffer() << std::endl;
       }
       // Generate query context
 
@@ -277,8 +277,7 @@ class Optimizer {
         // CWStringDynamic str(mp);
         // COstreamString oss(&str);
         // pexprOptimized->OsPrint(oss);
-        // wprintf(L"Optimized Expr:\n%ls\n", str.GetBuffer());
-        // wprintf(L"hi");
+        // std::wcout << str.GetBuffer() << std::endl;
         try {
           orcaextender::C2BConverter* c2bconverter = dynamicRegistry->GetDefaultErasedCExpression2BOSSConverter();
           auto ret = c2bconverter->ConvertExpr(pexprOptimized);

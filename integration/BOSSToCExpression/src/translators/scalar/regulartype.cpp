@@ -5,11 +5,24 @@
 namespace bosstocexpression {
 
 
-int32_t string_hash_i32(const std::string &str) {
-    std::hash<std::string> hasher;
-    size_t h = hasher(str);                  // platform-dependent size_t hash
-    return static_cast<int32_t>(h & 0xFFFFFFFF); // take lower 32 bits
+constexpr uint32_t fnv1a32(std::string_view s, uint32_t seed = 0) {
+    constexpr uint32_t FNV_OFFSET = 2166136261u;
+    constexpr uint32_t FNV_PRIME  = 16777619u;
+
+    uint32_t h = FNV_OFFSET ^ seed;
+    for (unsigned char c : s) {
+        h ^= c;
+        h *= FNV_PRIME;
+    }
+    return h;
 }
+
+inline int32_t string_hash_i32(std::string_view s) {
+    uint32_t h = fnv1a32(s);
+    h &= 0x7FFFFFFFu;                        
+    return static_cast<int32_t>(h);
+}
+
 
 
 std::pair<bool, Expression> RegularTypeTranslator::Match(Expression &&bossExpr) {
@@ -49,7 +62,6 @@ RetType<EmptyStruct> RegularTypeTranslator::Translate(Expression &&bossExpr, BOS
                                      static_cast<LINT>(val), CDouble(val)), true};
           },
           [&](float val) -> RetType<EmptyStruct> {
-            std::cout << "YOYOYO" << std::endl;
             // Create a float constant using CDatumGenericGPDB
             return {utils::CreateGenericType(mp, GPDB_FLOAT4_OID, &val, sizeof(float),
                                      static_cast<LINT>(val), CDouble(val)), true};
