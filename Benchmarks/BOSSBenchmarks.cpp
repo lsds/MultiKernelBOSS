@@ -1394,18 +1394,18 @@ static void TPCH_BOSS(benchmark::State& state, int queryIdx, int dataSize, int64
 
       std::cout << std::endl; // need this line for printing benchmarks
 
-      // encode GPU memory constraint
-      int64_t maxGPUCache = -1;
-      if (MAX_GPU_MEMORY_CACHE == -1) {
-        maxGPUCache = MaxDefaultMemoryConstraint.at(queryName);
-      } else {
-        maxGPUCache = MAX_GPU_MEMORY_CACHE;
+      // if GPU present, encode GPU memory constraint
+      if (std::find(librariesToOptimize().begin(), librariesToOptimize().end(), ArrayFireGPUPath) != librariesToOptimize().end()) {
+        int64_t maxGPUCache = -1;
+        if (MAX_GPU_MEMORY_CACHE == -1) {
+          maxGPUCache = MaxDefaultMemoryConstraint.at(queryName);
+        } else {
+          maxGPUCache = MAX_GPU_MEMORY_CACHE;
+        }
+
+        maxGPUCache = maxGPUCache * 1024 * 1024;
+        optimizer.AddSetMdConfigTask("ArrayFire", CCostModelParamsGPDB::EcpHJSpillingMemThreshold, maxGPUCache, maxGPUCache * 0.5, maxGPUCache * 2.0);
       }
-
-
-      maxGPUCache = maxGPUCache * 1024 * 1024;
-      optimizer.AddSetMdConfigTask("ArrayFire", CCostModelParamsGPDB::EcpHJSpillingMemThreshold, maxGPUCache, maxGPUCache * 0.5, maxGPUCache * 2.0);
-
 
       optimizer.AddOptimizeQueryTask(initialQuery.clone());
       std::string mdFile;
