@@ -62,6 +62,7 @@ static int BOSS_MAX_THREADS = 20;
 static int VELOX_NUM_DRIVERS = 0; // > 0 : overrides BOSS_MAX_THREADS
 static int VELOX_NUM_SPLITS = 512;
 static int VELOX_BATCH_SIZE = 100000; // > 0: overrides VELOX_NUM_SPLITS
+static int VELOX_INTERNAL_BATCH_SIZE = 0; // 0: use Velox default (1024)
 
 static bool USE_FIXED_POINT_NUMERIC_TYPE = false;
 
@@ -186,6 +187,9 @@ static void initBOSSEngine_TPCH(int dataSize, int64_t storageBlockSize) {
     checkForErrors(eval("Set"_("NumDrivers"_, VELOX_NUM_DRIVERS)));
     checkForErrors(eval("Set"_("InputBatchNumSplits"_, VELOX_NUM_SPLITS)));
     checkForErrors(eval("Set"_("InputBatchNumRows"_, VELOX_BATCH_SIZE)));
+    if(VELOX_INTERNAL_BATCH_SIZE > 0) {
+      checkForErrors(eval("Set"_("InternalBatchNumRows"_, VELOX_INTERNAL_BATCH_SIZE)));
+    }
 
     checkForErrors(
         eval("CreateTable"_("LINEITEM"_, "l_orderkey"_, "l_partkey"_, "l_suppkey"_, "l_linenumber"_,
@@ -1689,6 +1693,10 @@ void initAndRunBenchmarks(int argc, char** argv) {
     } else if(std::string("--velox-batch-size") == argv[i]) {
       if(++i < argc) {
         VELOX_BATCH_SIZE = atoi(argv[i]);
+      }
+    } else if(std::string("--velox-internal-batch-size") == argv[i]) {
+      if(++i < argc) {
+        VELOX_INTERNAL_BATCH_SIZE = atoi(argv[i]);
       }
     } else if(std::string("--monetdb-enable-multithreading") == argv[i]) {
       MONETDB_MULTITHREADING = true;
