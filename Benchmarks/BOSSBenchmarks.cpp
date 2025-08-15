@@ -69,6 +69,7 @@ static bool DISABLE_MMAP_CACHE = false;
 static bool DISABLE_GPU_CACHE = false;
 static bool DISABLE_CONSTRAINTS = false;
 static bool DISABLE_GATHER_OPERATOR = false;
+static bool USE_SELECT_TO_GATHER_OPERATOR = false;
 static bool DISABLE_AUTO_DICTIONARY_ENCODING = false;
 static bool DISABLE_STRINGS_AS_INTEGERS = false;
 static bool BENCHMARK_STORAGE_BLOCK_SIZE = false;
@@ -180,6 +181,7 @@ static void initBOSSEngine_TPCH(int dataSize, int64_t storageBlockSize) {
     checkForErrors(eval("Set"_("ArrayFireEngineCopyDataIn"_, BENCHMARK_DATA_COPY_IN)));
     checkForErrors(eval("Set"_("ArrayFireEngineCopyDataOut"_, BENCHMARK_DATA_COPY_OUT)));
     checkForErrors(eval("Set"_("DisableGatherOperator"_, DISABLE_GATHER_OPERATOR)));
+    checkForErrors(eval("Set"_("UseSelectToGatherOperator"_, USE_SELECT_TO_GATHER_OPERATOR)));
     checkForErrors(eval("Set"_("MaxThreads"_, BOSS_MAX_THREADS)));
     checkForErrors(eval("Set"_("NumDrivers"_, VELOX_NUM_DRIVERS)));
     checkForErrors(eval("Set"_("InputBatchNumSplits"_, VELOX_NUM_SPLITS)));
@@ -1648,6 +1650,8 @@ void initAndRunBenchmarks(int argc, char** argv) {
       DISABLE_CONSTRAINTS = true;
     } else if(std::string("--disable-gather-operator") == argv[i]) {
       DISABLE_GATHER_OPERATOR = true;
+    } else if(std::string("--use-select-to-gather-operator") == argv[i]) {
+      USE_SELECT_TO_GATHER_OPERATOR = true;
     } else if(std::string("--disable-auto-dictionary-encoding") == argv[i]) {
       DISABLE_AUTO_DICTIONARY_ENCODING = true;
     } else if(std::string("--disable-strings-as-integers") == argv[i]) {

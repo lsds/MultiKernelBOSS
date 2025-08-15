@@ -165,6 +165,7 @@ static auto& properties() {
     bool copyDataIn = false;                   // for benchmarking the cost of data movement
     bool copyDataOut = false;
     bool disableGather = false;
+    bool useSelectToGather = false;
   } props;
   return props;
 }
@@ -1084,7 +1085,7 @@ concept NumericType = requires(T param) {
 class OperatorMap : public std::unordered_map<boss::Symbol, StatelessOperator> {
 public:
   OperatorMap() {
-    (*this)["Set"_] = [](ComplexExpressionWithStaticArguments<Symbol, bool>&& input) -> Expression {
+    (*this)["Set"_] = [this](ComplexExpressionWithStaticArguments<Symbol, bool>&& input) -> Expression {
       auto const& key = get<0>(input.getStaticArguments());
       auto value = get<1>(input.getStaticArguments());
       if(key == "ArrayFireEngineCopyDataIn"_) {
@@ -1097,6 +1098,20 @@ public:
       }
       if(key == "DisableGatherOperator"_) {
         properties().disableGather = static_cast<bool>(value);
+        return true;
+      }
+      if(key == "UseSelectToGatherOperator"_) {
+        auto newUseSelectToGather = static_cast<bool>(value);
+        if(newUseSelectToGather && !properties().useSelectToGather) {
+          (*this)["FullSelect"_] = std::move((*this)["Select"_]);
+          (*this)["Select"_] = std::move((*this)["SelectToGather"_]);
+          this->erase("SelectToGather"_);
+        } else if(!newUseSelectToGather && properties().useSelectToGather) {
+          (*this)["SelectToGather"_] = std::move((*this)["Select"_]);
+          (*this)["Select"_] = std::move((*this)["FullSelect"_]);
+          this->erase("FullSelect"_);
+        }
+        properties().useSelectToGather = newUseSelectToGather;
         return true;
       }
       return std::move(input);
