@@ -48,7 +48,8 @@ BufferPtr importFromBossAsOwnerBuffer(BossArray&& bossArray);
 
 std::vector<RowVectorPtr>
 veloxRunQueryParallel(CursorParameters const& params, std::unique_ptr<TaskCursor>& cursor,
-                      std::vector<std::pair<core::PlanNodeId, size_t>> const& scanIds);
+                      std::vector<std::tuple<core::PlanNodeId, size_t, size_t>> const& scanIds,
+                      size_t numRows, size_t numSplits);
 
 void veloxPrintResults(std::vector<RowVectorPtr> const& results);
 

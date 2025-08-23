@@ -57,6 +57,11 @@ static int BENCHMARK_NUM_WARMPUP_ITERATIONS = 3;
 static bool MONETDB_MULTITHREADING = true;
 static int DUCKDB_MAX_THREADS = 100;
 
+static int BOSS_MAX_THREADS = 20;
+static int VELOX_NUM_DRIVERS = 0; // > 0 : overrides BOSS_MAX_THREADS
+static int VELOX_NUM_SPLITS = 512;
+static int VELOX_BATCH_SIZE = 100000; // > 0: overrides VELOX_NUM_SPLITS
+
 static bool USE_FIXED_POINT_NUMERIC_TYPE = false;
 
 static bool DISABLE_MMAP_CACHE = false;
@@ -153,6 +158,10 @@ static void initBOSSEngine_TPCH(int dataSize, int64_t storageBlockSize) {
     checkForErrors(eval("Set"_("ArrayFireEngineCopyDataIn"_, BENCHMARK_DATA_COPY_IN)));
     checkForErrors(eval("Set"_("ArrayFireEngineCopyDataOut"_, BENCHMARK_DATA_COPY_OUT)));
     checkForErrors(eval("Set"_("DisableGatherOperator"_, DISABLE_GATHER_OPERATOR)));
+    checkForErrors(eval("Set"_("MaxThreads"_, BOSS_MAX_THREADS)));
+    checkForErrors(eval("Set"_("NumDrivers"_, VELOX_NUM_DRIVERS)));
+    checkForErrors(eval("Set"_("InputBatchNumSplits"_, VELOX_NUM_SPLITS)));
+    checkForErrors(eval("Set"_("InputBatchNumRows"_, VELOX_BATCH_SIZE)));
 
     checkForErrors(
         eval("CreateTable"_("LINEITEM"_, "l_orderkey"_, "l_partkey"_, "l_suppkey"_, "l_linenumber"_,
@@ -819,7 +828,6 @@ static auto& monetdbQueries() {
        "      nation,"s
        "      o_year desc;"s},
       {TPCH_Q18, "select"s
-                 "     c_name,"s
                  "     c_custkey,"s
                  "     o_orderkey,"s
                  "     o_orderdate,"s
@@ -943,7 +951,6 @@ static auto& duckdbQueries() {
        "     nation,"
        "     o_year DESC;"},
       {TPCH_Q18, "SELECT"
-                 "       c_name,"
                  "       c_custkey,"
                  "       o_orderkey,"
                  "       o_orderdate,"
@@ -1254,6 +1261,22 @@ void initAndRunBenchmarks(int argc, char** argv) {
       if(++i < argc) {
         DUCKDB_MAX_THREADS = atoi(argv[i]);
       }
+    } else if(std::string("--max-threads") == argv[i]) {
+      if(++i < argc) {
+        BOSS_MAX_THREADS = atoi(argv[i]);
+      }
+    } else if(std::string("--num-drivers") == argv[i]) {
+      if(++i < argc) {
+        VELOX_NUM_DRIVERS = atoi(argv[i]);
+      }
+    } else if(std::string("--velox-num-splits") == argv[i]) {
+      if(++i < argc) {
+        VELOX_NUM_SPLITS = atoi(argv[i]);
+      }
+    } else if(std::string("--velox-batch-size") == argv[i]) {
+      if(++i < argc) {
+        VELOX_BATCH_SIZE = atoi(argv[i]);
+      }
     } else if(std::string("--monetdb-enable-multithreading") == argv[i]) {
       MONETDB_MULTITHREADING = true;
     } else if(std::string("--fixed-point-numeric-type") == argv[i]) {
@@ -1269,8 +1292,7 @@ void initAndRunBenchmarks(int argc, char** argv) {
     }
   }
   // register TPC-H benchmarks
-  for(int dataSize :
-           std::vector<int>{1, 10, 100, 1000, 2000, 5000, 10000, 20000, 50000, 100000}) {
+  for(int dataSize : std::vector<int>{1, 10, 100, 1000, 2000, 5000, 10000, 20000, 50000, 100000}) {
     for(int engine = ENGINE_START; engine < ENGINE_END; ++engine) {
       for(int64_t blockSize :
           (BENCHMARK_STORAGE_BLOCK_SIZE && engine == BOSS
